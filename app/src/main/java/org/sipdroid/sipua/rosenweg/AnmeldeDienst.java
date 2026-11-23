@@ -79,7 +79,13 @@ public class AnmeldeDienst extends Service {
 			if (!s.optBoolean("angemeldet", false)) {
 				handler.post(() -> Sperre.sperren(this));
 			} else {
+				// Freigaben koennen sich im Admin geaendert haben: neu anwenden.
+				org.json.JSONArray apps = s.optJSONArray("apps");
+				if (apps != null && !apps.toString().equals(Katalog.freigegeben(this).toString())) {
+					handler.post(() -> Katalog.freigeben(this, apps));
+				}
 				handler.post(this::zeigeBenachrichtigung);  // Name koennte gewechselt haben
+				Katalog.vielleichtAbgleichen(this, false);
 			}
 		} catch (Anlage.AnlageFehler e) {
 			// 401: Geraet nicht mehr als geteilt gefuehrt -> sperren.

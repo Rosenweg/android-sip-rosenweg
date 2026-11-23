@@ -1,0 +1,270 @@
+package org.sipdroid.sipua.rosenweg;
+
+import android.app.PendingIntent;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.Log;
+import android.webkit.CookieManager;
+import android.webkit.WebStorage;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Executors;
+
+/**
+ * App-Katalog des geteilten Telefons (kommt von der Anlage, /api/telefon/katalog).
+ *
+ * - Alle APKs des Katalogs werden still installiert (Device Owner) und sind
+ *   versteckt, solange niemand angemeldet ist.
+ * - Bei der Anmeldung: die fuer die Person freigegebenen Apps einblenden und
+ *   ihnen ihre Einstellungen geben (Managed Configurations).
+ * - Beim Abmelden: alles ausblenden, Daten persoenlicher Apps loeschen, die
+ *   Web-Sitzungen (Cookies, Speicher) der Rosenweg-App loeschen.
+ */
+public final class Katalog {
+	private static final String TAG = "RosenwegKatalog";
+	static final String PREF_KATALOG = "rosenweg_katalog";       // alle Apps (JSON-Array)
+	static final String PREF_FREIGEGEBEN = "rosenweg_apps";      // fuer die angemeldete Person
+	private static final String PREF_SHA = "rosenweg_apk_sha_";  // + Paket: zuletzt installiert
+
+	private Katalog() {}
+
+	public static JSONArray katalog(Context c) {
+		return liste(Anlage.prefs(c).getString(PREF_KATALOG, "[]"));
+	}
+
+	public static JSONArray freigegeben(Context c) {
+		return liste(Anlage.prefs(c).getString(PREF_FREIGEGEBEN, "[]"));
+	}
+
+	static void merkeFreigegeben(Context c, JSONArray apps) {
+		Anlage.prefs(c).edit().putString(PREF_FREIGEGEBEN, apps == null ? "[]" : apps.toString()).apply();
+	}
+
+	private static JSONArray liste(String s) {
+		try {
+			return new JSONArray(s);
+		} catch (Exception e) {
+			return new JSONArray();
+		}
+	}
+
+	// ─── Synchronisieren (Hintergrund-Thread!) ──────────────────────────────
+
+	private static final String PREF_ABGLEICH = "rosenweg_abgleich_zeit";
+	private static final long ABGLEICH_ALLE_MS = 6 * 3600 * 1000L;
+	private static volatile boolean gleichtAb;
+
+	/** Katalog + Telefonbuch im Hintergrund abgleichen, hoechstens alle 6 h (ausser erzwungen). */
+	public static void vielleichtAbgleichen(Context c, boolean erzwingen) {
+		Context app = c.getApplicationContext();
+		long zuletzt = Anlage.prefs(app).getLong(PREF_ABGLEICH, 0);
+		if (gleichtAb || (!erzwingen && System.currentTimeMillis() - zuletzt < ABGLEICH_ALLE_MS)) return;
+		if (!Anlage.eingerichtet(app)) return;
+		gleichtAb = true;
+		new Thread(() -> {
+			try {
+				synchronisieren(app);
+				Kontakte.abgleichen(app);
+				Anlage.prefs(app).edit().putLong(PREF_ABGLEICH, System.currentTimeMillis()).apply();
+			} finally {
+				gleichtAb = false;
+			}
+		}, "rosenweg-abgleich").start();
+	}
+
+	/** Katalog holen und fehlende/geaenderte APKs installieren. Blockiert. */
+	public static void synchronisieren(Context c) {
+		if (!Sperre.istDeviceOwner(c)) return;
+		try {
+			JSONArray apps = Anlage.katalog(c);
+			Anlage.prefs(c).edit().putString(PREF_KATALOG, apps.toString()).apply();
+			for (int i = 0; i < apps.length(); i++) {
+				JSONObject a = apps.getJSONObject(i);
+				if (!"apk".equals(a.optString("art")) || a.isNull("download")) continue;
+				String paket = a.getString("paket");
+				String sha = a.optString("sha256", "");
+				if (installiert(c, paket) && sha.equals(Anlage.prefs(c).getString(PREF_SHA + paket, ""))) continue;
+				installieren(c, paket, a.getString("download"), sha);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "synchronisieren: " + e);
+		}
+	}
+
+	static boolean installiert(Context c, String paket) {
+		try {
+			int flags = Build.VERSION.SDK_INT >= 24 ? PackageManager.MATCH_UNINSTALLED_PACKAGES : 0;
+			c.getPackageManager().getPackageInfo(paket, flags);
+			return true;
+		} catch (PackageManager.NameNotFoundException e) {
+			return false;
+		}
+	}
+
+	private static void installieren(Context c, String paket, String pfad, String sha) throws Exception {
+		File datei = new File(c.getCacheDir(), "apk-" + paket + ".apk");
+		Anlage.herunterladen(c, pfad, datei);
+		String ist = sha256(datei);
+		if (!ist.equalsIgnoreCase(sha)) {
+			datei.delete();
+			throw new SecurityException("SHA-256 stimmt nicht: " + paket);
+		}
+		PackageInstaller pi = c.getPackageManager().getPackageInstaller();
+		PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+		p.setAppPackageName(paket);
+		if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+		int id = pi.createSession(p);
+		try (PackageInstaller.Session s = pi.openSession(id)) {
+			try (OutputStream o = s.openWrite("base.apk", 0, datei.length());
+				 InputStream in = new FileInputStream(datei)) {
+				byte[] puffer = new byte[65536];
+				int n;
+				while ((n = in.read(puffer)) > 0) o.write(puffer, 0, n);
+				s.fsync(o);
+			}
+			Intent fertig = new Intent(c, InstallEmpfaenger.class)
+					.putExtra(InstallEmpfaenger.EXTRA_PAKET, paket)
+					.putExtra(InstallEmpfaenger.EXTRA_SHA, sha);
+			int f = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+			s.commit(PendingIntent.getBroadcast(c, id, fertig, f).getIntentSender());
+		} finally {
+			datei.delete();
+		}
+		Log.i(TAG, "Installation angestossen: " + paket);
+	}
+
+	static void installiertGemerkt(Context c, String paket, String sha) {
+		Anlage.prefs(c).edit().putString(PREF_SHA + paket, sha).apply();
+	}
+
+	private static String sha256(File f) throws Exception {
+		MessageDigest md = MessageDigest.getInstance("SHA-256");
+		try (InputStream in = new FileInputStream(f)) {
+			byte[] puffer = new byte[65536];
+			int n;
+			while ((n = in.read(puffer)) > 0) md.update(puffer, 0, n);
+		}
+		StringBuilder sb = new StringBuilder();
+		for (byte b : md.digest()) sb.append(String.format("%02x", b));
+		return sb.toString();
+	}
+
+	// ─── Sperren / Freigeben ────────────────────────────────────────────────
+
+	private static List<String> apkPakete(JSONArray apps) {
+		List<String> l = new ArrayList<>();
+		for (int i = 0; i < apps.length(); i++) {
+			JSONObject a = apps.optJSONObject(i);
+			if (a != null && "apk".equals(a.optString("art"))) l.add(a.optString("paket"));
+		}
+		return l;
+	}
+
+	/** Abmelden: alle Katalog-Apps verstecken, persoenliche Daten loeschen. */
+	static void sperren(Context c) {
+		JSONArray alle = katalog(c);
+		merkeFreigegeben(c, null);
+		webDatenLoeschen();
+		if (!Sperre.istDeviceOwner(c)) return;
+		DevicePolicyManager d = Sperre.dpm(c);
+		ComponentName a = Sperre.admin(c);
+		for (int i = 0; i < alle.length(); i++) {
+			JSONObject app = alle.optJSONObject(i);
+			if (app == null || !"apk".equals(app.optString("art"))) continue;
+			String paket = app.optString("paket");
+			if (!installiert(c, paket)) continue;
+			try {
+				d.setApplicationRestrictions(a, paket, new Bundle());
+				d.setApplicationHidden(a, paket, true);
+				if (app.optBoolean("persoenlich", true) && Build.VERSION.SDK_INT >= 28) {
+					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
+							(p, ok) -> Log.i(TAG, "Daten geloescht " + p + ": " + ok));
+				}
+			} catch (Exception e) {
+				Log.w(TAG, "sperren " + paket + ": " + e);
+			}
+		}
+	}
+
+	/** Anmelden: freigegebene Apps einblenden und einrichten. */
+	static void freigeben(Context c, JSONArray apps) {
+		merkeFreigegeben(c, apps);
+		if (!Sperre.istDeviceOwner(c) || apps == null) return;
+		DevicePolicyManager d = Sperre.dpm(c);
+		ComponentName a = Sperre.admin(c);
+		for (int i = 0; i < apps.length(); i++) {
+			JSONObject app = apps.optJSONObject(i);
+			if (app == null || !"apk".equals(app.optString("art"))) continue;
+			String paket = app.optString("paket");
+			if (!installiert(c, paket)) continue;
+			try {
+				d.setApplicationRestrictions(a, paket, bundle(app.optJSONObject("konfig")));
+				d.setApplicationHidden(a, paket, false);
+			} catch (Exception e) {
+				Log.w(TAG, "freigeben " + paket + ": " + e);
+			}
+		}
+	}
+
+	/** Nach einer Installation waehrend niemand angemeldet ist: gleich verstecken. */
+	static void nachInstallation(Context c, String paket) {
+		if (!Sperre.istDeviceOwner(c)) return;
+		boolean erlaubt = apkPakete(freigegeben(c)).contains(paket) && Anlage.angemeldet(c);
+		try {
+			Sperre.dpm(c).setApplicationHidden(Sperre.admin(c), paket, !erlaubt);
+		} catch (Exception e) {
+			Log.w(TAG, "nachInstallation " + paket + ": " + e);
+		}
+	}
+
+	private static Bundle bundle(JSONObject k) {
+		Bundle b = new Bundle();
+		if (k == null) return b;
+		Iterator<String> it = k.keys();
+		while (it.hasNext()) {
+			String key = it.next();
+			Object v = k.opt(key);
+			if (v instanceof Boolean) b.putBoolean(key, (Boolean) v);
+			else if (v instanceof Integer) b.putInt(key, (Integer) v);
+			else if (v != null) b.putString(key, String.valueOf(v));
+		}
+		return b;
+	}
+
+	/** Cookies und Web-Speicher der Rosenweg-App: Authentik- und Web-App-Sitzungen weg. */
+	static void webDatenLoeschen() {
+		try {
+			CookieManager cm = CookieManager.getInstance();
+			cm.removeAllCookies(null);
+			cm.flush();
+			WebStorage.getInstance().deleteAllData();
+		} catch (Exception e) {
+			Log.w(TAG, "webDatenLoeschen: " + e);
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private static void schreibe(File f, byte[] d) throws Exception {
+		try (FileOutputStream o = new FileOutputStream(f)) {
+			o.write(d);
+		}
+	}
+}

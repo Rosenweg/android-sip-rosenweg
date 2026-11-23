@@ -82,6 +82,8 @@ public final class Sperre {
 			String[] rechte = {
 					android.Manifest.permission.RECORD_AUDIO,
 					android.Manifest.permission.CAMERA,          // Anmelde-QR scannen
+					android.Manifest.permission.READ_CONTACTS,   // Telefonbuch "Rosenweg"
+					android.Manifest.permission.WRITE_CONTACTS,
 					android.Manifest.permission.READ_PHONE_STATE,
 					android.Manifest.permission.CALL_PHONE,
 					"android.permission.BLUETOOTH_CONNECT",
@@ -94,6 +96,13 @@ public final class Sperre {
 				} catch (Exception e) {
 					Log.w(TAG, "Recht " + r + ": " + e.getMessage());
 				}
+			}
+			// "Rosenweg" ueberall, wo Android es zulaesst. Der Netzbetreiber-Name in
+			// der Statusleiste gehoert nicht dazu: den liefert das Modem aus der
+			// SIM, auch ein Device Owner kann ihn nicht setzen.
+			if (Build.VERSION.SDK_INT >= 24) {
+				d.setOrganizationName(a, "Rosenweg");
+				d.setDeviceOwnerLockScreenInfo(a, "Rosenweg Telefon · Nebenstelle " + Anlage.nebenstelle(c));
 			}
 			d.addUserRestriction(a, UserManager.DISALLOW_FACTORY_RESET);
 			d.addUserRestriction(a, UserManager.DISALLOW_SAFE_BOOT);
@@ -118,6 +127,7 @@ public final class Sperre {
 	/** Niemand angemeldet: Sperrbildschirm als HOME, Lock-Task, Statusleiste aus. */
 	public static void sperren(Context c) {
 		Anlage.merke(c, false, null);
+		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
 		c.stopService(new Intent(c, AnmeldeDienst.class));
@@ -140,9 +150,10 @@ public final class Sperre {
 		c.startActivity(i);
 	}
 
-	/** Angemeldet: normaler Startbildschirm zurueck, Dienst mit Benachrichtigung starten. */
-	public static void freigeben(Context c, String name) {
+	/** Angemeldet: normaler Startbildschirm zurueck, Apps der Person, Dienst mit Benachrichtigung. */
+	public static void freigeben(Context c, String name, org.json.JSONArray apps) {
 		Anlage.merke(c, true, name);
+		Katalog.freigeben(c, apps != null ? apps : Katalog.freigegeben(c));
 		Receiver.updatePhoneAccount(c);
 		if (istDeviceOwner(c)) {
 			DevicePolicyManager d = dpm(c);

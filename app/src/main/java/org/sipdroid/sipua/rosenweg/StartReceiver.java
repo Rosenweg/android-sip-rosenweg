@@ -19,6 +19,7 @@ public class StartReceiver extends BroadcastReceiver {
 		// Android 8 nicht mehr — nach einem Update waere das Telefon sonst stumm.
 		org.sipdroid.sipua.ui.Receiver.engine(c).register();
 		if (!Sperre.istDeviceOwner(c)) return;
+		Katalog.vielleichtAbgleichen(c, true);
 		Sperre.grundregeln(c);
 		Sperre.sperren(c);
 	}

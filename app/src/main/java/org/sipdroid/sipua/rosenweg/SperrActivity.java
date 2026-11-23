@@ -70,11 +70,17 @@ public class SperrActivity extends Activity {
 		setContentView(baueOberflaeche());
 		// Sicherstellen, dass die SIP-Engine laeuft (startet sie, falls noch nicht).
 		org.sipdroid.sipua.ui.Receiver.engine(this);
+		Katalog.vielleichtAbgleichen(this, false);
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
+		// Zurueck aus dem Anmeldefenster und schon angemeldet: nicht wieder sperren.
+		if (Anlage.angemeldet(this)) {
+			entsperrt(Anlage.name(this), null);
+			return;
+		}
 		Sperre.grundregeln(this);
 		if (Sperre.istDeviceOwner(this) && !imLockTask()) {
 			try {
@@ -173,7 +179,7 @@ public class SperrActivity extends Activity {
 			JSONObject r = Anlage.einloesen(this, inhalt);
 			if (r.optBoolean("angemeldet", false)) {
 				String name = r.optString("name", "");
-				runOnUiThread(() -> entsperrt(name));
+				runOnUiThread(() -> entsperrt(name, r.optJSONArray("apps")));
 			}
 		} catch (Anlage.AnlageFehler e) {
 			zeige(e.status == 401
@@ -210,7 +216,7 @@ public class SperrActivity extends Activity {
 			JSONObject s = Anlage.status(this);
 			if (s.optBoolean("angemeldet", false)) {
 				String name = s.optString("name", "");
-				runOnUiThread(() -> entsperrt(name));
+				runOnUiThread(() -> entsperrt(name, s.optJSONArray("apps")));
 			}
 		} catch (Anlage.AnlageFehler e) {
 			if (e.status == 401) zeige("Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben.", true);
@@ -229,12 +235,12 @@ public class SperrActivity extends Activity {
 		});
 	}
 
-	private void entsperrt(String name) {
+	private void entsperrt(String name, org.json.JSONArray apps) {
 		if (isFinishing()) return;
 		laeuft = false;
 		handler.removeCallbacks(takt);
 		kamera.pause();
-		Sperre.freigeben(this, name);
+		Sperre.freigeben(this, name, apps);
 		if (imLockTask()) {
 			try {
 				stopLockTask();
@@ -327,7 +333,7 @@ public class SperrActivity extends Activity {
 		l.addView(rahmen, new LinearLayout.LayoutParams(dp(280), dp(280)));
 
 		TextView hinweis = text(16, hell, false);
-		hinweis.setText("Auf deinem Handy pbx.rosenweg4303.ch/telefon öffnen\nund den Anmelde-QR vor die Kamera halten.");
+		hinweis.setText("Auf deinem Handy pbx.rosenweg4303.ch/telefon öffnen\nund den Anmelde-QR vor die Kamera halten —\noder unten direkt mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
 
@@ -338,6 +344,13 @@ public class SperrActivity extends Activity {
 
 		View platz = new View(this);
 		l.addView(platz, new LinearLayout.LayoutParams(1, 0, 1f));
+
+		Button konto = knopf("Mit Rosenweg-Konto anmelden", "#2563EB");
+		konto.setOnClickListener(v -> startActivity(new Intent(this, WebAppActivity.class)
+				.putExtra(WebAppActivity.EXTRA_ANMELDEN, true)));
+		LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
+		kp.bottomMargin = dp(10);
+		l.addView(konto, kp);
 
 		Button wechseln = knopf("Kamera wechseln", "#334155");
 		wechseln.setOnClickListener(v -> {

@@ -72,11 +72,43 @@ public final class Anlage {
 		return r;
 	}
 
-	/** GET /api/telefon/status -> {angemeldet, name, email, seit}; merkt sich das Ergebnis. */
+	/** GET /api/telefon/status -> {angemeldet, name, email, seit, apps}; merkt sich das Ergebnis. */
 	public static JSONObject status(Context c) throws Exception {
 		JSONObject s = anfrage(c, "GET", "/api/telefon/status");
 		merke(c, s.optBoolean("angemeldet", false), s.optString("name", ""));
 		return s;
+	}
+
+	/** GET /api/telefon/katalog -> alle Apps des Geraets. */
+	public static org.json.JSONArray katalog(Context c) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/katalog").getJSONArray("apps");
+	}
+
+	/** GET /api/telefon/kontakte[?version=] -> {version, kontakte} oder {unveraendert:true}. */
+	public static JSONObject kontakte(Context c, String version) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/kontakte"
+				+ (version == null || version.isEmpty() ? "" : "?version=" + java.net.URLEncoder.encode(version, "UTF-8")));
+	}
+
+	/** Datei (APK) mit den Geraete-Zugangsdaten herunterladen. */
+	public static void herunterladen(Context c, String pfad, java.io.File ziel) throws Exception {
+		SharedPreferences p = prefs(c);
+		String zugang = p.getString(Settings.PREF_USERNAME, "") + ":" + p.getString(Settings.PREF_PASSWORD, "");
+		HttpURLConnection v = (HttpURLConnection) new URL(p.getString(PREF_API, API_STANDARD) + pfad).openConnection();
+		try {
+			v.setConnectTimeout(15000);
+			v.setReadTimeout(60000);
+			v.setRequestProperty("Authorization", "Basic "
+					+ Base64.encodeToString(zugang.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
+			if (v.getResponseCode() != 200) throw new AnlageFehler(v.getResponseCode(), "Download " + pfad);
+			try (InputStream in = v.getInputStream(); OutputStream o = new java.io.FileOutputStream(ziel)) {
+				byte[] puffer = new byte[65536];
+				int n;
+				while ((n = in.read(puffer)) > 0) o.write(puffer, 0, n);
+			}
+		} finally {
+			v.disconnect();
+		}
 	}
 
 	/** POST /api/telefon/abmelden */
