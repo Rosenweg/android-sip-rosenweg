@@ -43,6 +43,8 @@ public final class Katalog {
 	static final String PREF_KATALOG = "rosenweg_katalog";       // alle Apps (JSON-Array)
 	static final String PREF_FREIGEGEBEN = "rosenweg_apps";      // fuer die angemeldete Person
 	private static final String PREF_SHA = "rosenweg_apk_sha_";  // + Paket: zuletzt installiert
+	/** Pakete, die diese App selbst installiert hat — nur die darf sie wieder entfernen. */
+	private static final String PREF_VERWALTET = "rosenweg_verwaltet";
 
 	private Katalog() {}
 
@@ -94,8 +96,12 @@ public final class Katalog {
 	public static void synchronisieren(Context c) {
 		if (!Sperre.istDeviceOwner(c)) return;
 		try {
-			JSONArray apps = Anlage.katalog(c);
+			JSONObject k = Anlage.katalog(c);
+			JSONArray apps = k.getJSONArray("apps");
 			Anlage.prefs(c).edit().putString(PREF_KATALOG, apps.toString()).apply();
+			Ausblenden.merkeListe(c, k.optJSONArray("ausblenden"));
+			Ausblenden.anwenden(c);
+			entfernteDeinstallieren(c, apkPakete(apps));
 			for (int i = 0; i < apps.length(); i++) {
 				JSONObject a = apps.getJSONObject(i);
 				if (!"apk".equals(a.optString("art")) || a.isNull("download")) continue;
@@ -152,7 +158,45 @@ public final class Katalog {
 	}
 
 	static void installiertGemerkt(Context c, String paket, String sha) {
-		Anlage.prefs(c).edit().putString(PREF_SHA + paket, sha).apply();
+		java.util.Set<String> v = new java.util.HashSet<>(
+				Anlage.prefs(c).getStringSet(PREF_VERWALTET, new java.util.HashSet<>()));
+		v.add(paket);
+		Anlage.prefs(c).edit().putString(PREF_SHA + paket, sha).putStringSet(PREF_VERWALTET, v).apply();
+	}
+
+	/**
+	 * Apps, die aus dem Katalog entfernt wurden, wieder deinstallieren — aber nur
+	 * solche, die diese App selbst installiert hat. Sonst bliebe z.B. eine
+	 * ersetzte App nach der naechsten Anmeldung sichtbar.
+	 */
+	private static void entfernteDeinstallieren(Context c, List<String> imKatalog) {
+		java.util.Set<String> verwaltet = new java.util.HashSet<>(
+				Anlage.prefs(c).getStringSet(PREF_VERWALTET, new java.util.HashSet<>()));
+		// Aeltere Installationen (vor dieser Liste) erkennt man am gemerkten SHA.
+		for (String k : Anlage.prefs(c).getAll().keySet()) {
+			if (k.startsWith(PREF_SHA)) verwaltet.add(k.substring(PREF_SHA.length()));
+		}
+		java.util.Set<String> bleibt = new java.util.HashSet<>();
+		PackageInstaller pi = c.getPackageManager().getPackageInstaller();
+		for (String paket : verwaltet) {
+			if (imKatalog.contains(paket)) {
+				bleibt.add(paket);
+				continue;
+			}
+			Anlage.prefs(c).edit().remove(PREF_SHA + paket).apply();
+			if (!installiert(c, paket)) continue;
+			try {
+				Intent fertig = new Intent(c, InstallEmpfaenger.class).putExtra(InstallEmpfaenger.EXTRA_PAKET, paket)
+						.putExtra(InstallEmpfaenger.EXTRA_ENTFERNT, true);
+				int f = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+				pi.uninstall(paket, PendingIntent.getBroadcast(c, paket.hashCode(), fertig, f).getIntentSender());
+				Log.i(TAG, "Deinstallation angestossen: " + paket);
+			} catch (Exception e) {
+				Log.w(TAG, "deinstallieren " + paket + ": " + e);
+				bleibt.add(paket);   // naechstes Mal wieder versuchen
+			}
+		}
+		Anlage.prefs(c).edit().putStringSet(PREF_VERWALTET, bleibt).apply();
 	}
 
 	private static String sha256(File f) throws Exception {

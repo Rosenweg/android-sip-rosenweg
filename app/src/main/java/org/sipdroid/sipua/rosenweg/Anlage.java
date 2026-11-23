@@ -79,9 +79,9 @@ public final class Anlage {
 		return s;
 	}
 
-	/** GET /api/telefon/katalog -> alle Apps des Geraets. */
-	public static org.json.JSONArray katalog(Context c) throws Exception {
-		return anfrage(c, "GET", "/api/telefon/katalog").getJSONArray("apps");
+	/** GET /api/telefon/katalog -> {apps: alle Apps des Geraets, ausblenden: System-Apps}. */
+	public static JSONObject katalog(Context c) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/katalog");
 	}
 
 	/** GET /api/telefon/kontakte[?version=] -> {version, kontakte} oder {unveraendert:true}. */

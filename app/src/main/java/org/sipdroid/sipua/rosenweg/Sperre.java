@@ -112,6 +112,7 @@ public final class Sperre {
 			erlaubt[0] = c.getPackageName();
 			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
 			d.setLockTaskPackages(a, erlaubt);
+			Ausblenden.anwenden(c);   // gemerkte Liste, auch ohne Netz
 			if (Build.VERSION.SDK_INT >= 28) {
 				// Im gesperrten Zustand: keine Benachrichtigungen, kein Home/Overview,
 				// keine Schnelleinstellungen. Uhr/Akku (SYSTEM_INFO) und der

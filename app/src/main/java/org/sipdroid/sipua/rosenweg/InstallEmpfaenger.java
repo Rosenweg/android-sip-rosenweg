@@ -10,11 +10,16 @@ import android.util.Log;
 public class InstallEmpfaenger extends BroadcastReceiver {
 	static final String EXTRA_PAKET = "rosenweg_paket";
 	static final String EXTRA_SHA = "rosenweg_sha";
+	static final String EXTRA_ENTFERNT = "rosenweg_entfernt";
 
 	@Override
 	public void onReceive(Context c, Intent i) {
 		int status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
 		String paket = i.getStringExtra(EXTRA_PAKET);
+		if (i.getBooleanExtra(EXTRA_ENTFERNT, false)) {
+			Log.i("RosenwegKatalog", "deinstalliert: " + paket + " (Status " + status + ")");
+			return;
+		}
 		if (status == PackageInstaller.STATUS_SUCCESS) {
 			Log.i("RosenwegKatalog", "installiert: " + paket);
 			Katalog.installiertGemerkt(c, paket, i.getStringExtra(EXTRA_SHA));
