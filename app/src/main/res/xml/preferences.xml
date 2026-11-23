@@ -122,7 +122,7 @@
 		android:title="@string/codecs" >
         	<intent
                 	android:action="android.intent.action.MAIN"
-	                android:targetPackage="com.androidsip.app"
+	                android:targetPackage="ch.rosenweg4303.telefon"
 	                android:targetClass="org.sipdroid.codecs.Codecs$CodecSettings" />
 
 	</PreferenceScreen>

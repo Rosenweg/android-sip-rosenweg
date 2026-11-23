@@ -132,6 +132,10 @@ import org.zoolu.sip.provider.SipProvider;
 		public static Context mContext;
 		public static Service sContext;
 		public static SipConnection activeConnection;
+		/** Rosenweg: Anzeigename aus dem From-Header des laufenden eingehenden Anrufs. */
+		public static String incomingDisplayName = null;
+		/** Rosenweg: Name des Anrufkontos in der Telefon-App. */
+		public static final String ACCOUNT_LABEL = "Rosenweg";
 		public static android.telecom.PhoneAccountHandle phoneAccountHandle = null;
 		public static String telecomSetupError = null;
 
@@ -184,12 +188,12 @@ import org.zoolu.sip.provider.SipProvider;
 				String callerId = getActiveCallerId(context);
 				String shortDesc;
 				if (callerId != null && !callerId.isEmpty() && !callerId.equals("Android SIP Calls")) {
-					shortDesc = isAnyRegistered ? callerId : callerId + " (Offline)";
+					shortDesc = ACCOUNT_LABEL + " · " + callerId + (isAnyRegistered ? "" : " (Offline)");
 				} else {
-					shortDesc = isAnyRegistered ? "Android SIP" : "Android SIP (Offline)";
+					shortDesc = isAnyRegistered ? ACCOUNT_LABEL : ACCOUNT_LABEL + " (Offline)";
 				}
 				
-				android.telecom.PhoneAccount.Builder builder = android.telecom.PhoneAccount.builder(phoneAccountHandle, "Android SIP")
+				android.telecom.PhoneAccount.Builder builder = android.telecom.PhoneAccount.builder(phoneAccountHandle, ACCOUNT_LABEL)
 						.setShortDescription(shortDesc)
 						.addSupportedUriScheme("sip")
 						.addSupportedUriScheme("sipdroid")
@@ -276,6 +280,11 @@ import org.zoolu.sip.provider.SipProvider;
 					if (text2.indexOf("\"") >= 0)
 						text2 = text2.substring(text2.indexOf("\"")+1,text2.lastIndexOf("\""));
 					broadcastCallStateChanged("RINGING", caller);
+					// Rosenweg: den Anzeigenamen nicht wegwerfen. Die Anlage setzt dort
+					// den Namen aus dem Rosenweg-Verzeichnis (CNAM); ohne ihn zeigte die
+					// Telefon-App nur die Nummer.
+					incomingDisplayName = (text2 != null && caller.indexOf("\"") >= 0
+							&& text2.trim().length() > 0) ? text2.trim() : null;
 //			        mContext.sendBroadcast(new Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS));
 					String cleanAddress = caller;
 					if (cleanAddress != null) {

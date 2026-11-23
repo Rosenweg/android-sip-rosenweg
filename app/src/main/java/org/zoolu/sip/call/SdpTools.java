@@ -97,6 +97,27 @@ public class SdpTools {
 								}
 							}
 						}
+						// Rosenweg: dynamische Payloads (96-127) ohne uebrig gebliebene
+						// rtpmap-Zeile entfernen. Sonst entsteht ein SDP, das strenge
+						// Gegenstellen (pjproject: PJMEDIA_SDP_EMISSINGRTPMAP) ablehnen.
+						for (int f = new_formats.size() - 1; f >= 0; f--) {
+							int pt;
+							try {
+								pt = Integer.parseInt(new_formats.get(f).trim());
+							} catch (NumberFormatException ex) {
+								continue;
+							}
+							if (pt < 96 || pt > 127) continue;
+							boolean hatRtpmap = false;
+							for (AttributeField a : new_attributes) {
+								if (a.getAttributeName().equals("rtpmap")
+										&& a.getAttributeValue().trim().startsWith(pt + " ")) {
+									hatRtpmap = true;
+									break;
+								}
+							}
+							if (!hatRtpmap) new_formats.remove(f);
+						}
 						MediaField new_mf = new MediaField(prev_mf.getMedia(), prev_mf.getPort(), 0,
 								prev_mf.getTransport(), new_formats);
 						if (new_attributes.size() > 0)

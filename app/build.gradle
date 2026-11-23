@@ -4,11 +4,13 @@ android {
     compileSdkVersion 35
 
     defaultConfig {
-        applicationId "com.androidsip.app"
+        // Eigener Paketname: Pflicht nach ADDITIONAL_TERMS.txt (Sipdroid) und
+        // damit die Variante neben dem Original installierbar ist.
+        applicationId "ch.rosenweg4303.telefon"
         minSdkVersion 16
         targetSdkVersion 35
-        versionCode 151
-        versionName "1.4"
+        versionCode 152
+        versionName "1.4-rosenweg.1"
     }
 
     signingConfigs {

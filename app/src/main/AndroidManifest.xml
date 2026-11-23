@@ -67,7 +67,7 @@
 	      	<intent-filter>
 	        	<action android:name="android.intent.action.PACKAGE_REPLACED" />
 	        	<data android:scheme="package" />
-	        	<data android:path="com.androidsip.app" />
+	        	<data android:path="ch.rosenweg4303.telefon" />
 	      	</intent-filter>
 	    </receiver>
         <receiver android:name="org.sipdroid.sipua.ui.PhoneStart" android:exported="true" >

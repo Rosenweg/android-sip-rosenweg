@@ -509,8 +509,41 @@ public class UserAgent extends CallListenerAdapter {
 			audio_app.bluetoothMedia();
 	}
 
+	/** Payload-Typ fuer telephone-event in eigenen Angeboten (RFC 4733). */
+	private static final int DTMF_AVP_OFFER = 101;
+
 	private void createOffer() {
+		user_profile.dtmf_avp = DTMF_AVP_OFFER;
 		initSessionDescriptor(null);
+	}
+
+	/**
+	 * Rosenweg: Payload-Typ, den die Gegenseite fuer telephone-event/8000
+	 * anbietet, oder 0 wenn keiner.
+	 *
+	 * Bisher stand der DTMF-Payload fest auf 101. Bietet die Gegenseite 101 mit
+	 * anderer Taktrate an (Asterisk: "101 telephone-event/48000" fuer Opus,
+	 * "102 telephone-event/8000"), verwarf sdpMediaProduct() die nicht
+	 * passende rtpmap-Zeile, liess die 101 aber in der m=-Zeile stehen. Die
+	 * Antwort war damit ungueltig (dynamischer Payload ohne rtpmap) und
+	 * pjproject brach jeden eingehenden Anruf ab.
+	 */
+	private static int remoteDtmfPayload(SessionDescriptor remote_sdp) {
+		MediaDescriptor md = remote_sdp.getMediaDescriptor("audio");
+		if (md == null) return 0;
+		for (AttributeField a : md.getAttributes("rtpmap")) {
+			String v = a.getAttributeValue();
+			if (v == null) continue;
+			String[] teile = v.trim().split("\\s+", 2);
+			if (teile.length == 2 && teile[1].trim().equalsIgnoreCase("telephone-event/8000")) {
+				try {
+					return Integer.parseInt(teile[0]);
+				} catch (NumberFormatException e) {
+					return 0;
+				}
+			}
+		}
+		return 0;
 	}
 
 	private void createAnswer(SessionDescriptor remote_sdp) {
@@ -518,6 +551,7 @@ public class UserAgent extends CallListenerAdapter {
 		Codecs.Map c = Codecs.getCodec(remote_sdp);
 		if (c == null)
 			throw new RuntimeException("Failed to get CODEC: AVAILABLE : " + remote_sdp);
+		user_profile.dtmf_avp = remoteDtmfPayload(remote_sdp);
 		initSessionDescriptor(c);
 		sessionProduct(remote_sdp);
 	}
