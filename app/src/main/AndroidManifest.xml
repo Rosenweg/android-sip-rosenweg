@@ -88,7 +88,57 @@
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
         </service>
+
+        <!-- ─── Rosenweg: geteiltes Telefon (Anmeldung, Sperre als Device Owner) ─── -->
+        <receiver android:name=".rosenweg.AdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data android:name="android.app.device_admin"
+                android:resource="@xml/rosenweg_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".rosenweg.StartReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Startbildschirm im gesperrten Zustand: Device Owner setzt ihn per
+             addPersistentPreferredActivity als HOME; lockTaskMode erlaubt den Kiosk. -->
+        <activity android:name=".rosenweg.SperrActivity"
+            android:label="Rosenweg Telefon"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:lockTaskMode="if_whitelisted"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!-- HOME nur im gesperrten Zustand: Sperre schaltet diesen Alias ein/aus.
+             Fest an der Activity wuerde Android nach der Anmeldung fragen,
+             welcher Startbildschirm gelten soll. -->
+        <activity-alias android:name=".rosenweg.SperrHome"
+            android:targetActivity=".rosenweg.SperrActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+        <service android:name=".rosenweg.AnmeldeDienst"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Zeigt die Anmeldung am geteilten Telefon und bietet Abmelden an" />
+        </service>
     </application>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+	<uses-permission android:name="android.permission.CAMERA"/>
+	<uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 	<uses-permission android:name="android.permission.INTERNET"/>
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 	<uses-permission android:name="android.permission.RECORD_AUDIO"/>

@@ -889,6 +889,12 @@ import org.zoolu.sip.provider.SipProvider;
 		}   
 
 		public static String getActiveCallerId(Context context) {
+			// Rosenweg: am geteilten Telefon steht der Name der angemeldeten Person
+			// im Anrufkonto ("Rosenweg · Name").
+			if (org.sipdroid.sipua.rosenweg.Anlage.angemeldet(context)) {
+				String rwName = org.sipdroid.sipua.rosenweg.Anlage.name(context);
+				if (rwName != null && !rwName.isEmpty()) return rwName;
+			}
 			org.sipdroid.sipua.SipdroidEngine engine = Receiver.mSipdroidEngine;
 			if (engine != null && engine.ras != null) {
 				for (int i=0; i<engine.ras.length; i++) {

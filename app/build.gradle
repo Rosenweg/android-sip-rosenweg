@@ -7,10 +7,11 @@ android {
         // Eigener Paketname: Pflicht nach ADDITIONAL_TERMS.txt (Sipdroid) und
         // damit die Variante neben dem Original installierbar ist.
         applicationId "ch.rosenweg4303.telefon"
-        minSdkVersion 16
+        // 21: natives Multidex (zxing sprengt sonst die 64K-Grenze), Device-Owner-APIs
+        minSdkVersion 21
         targetSdkVersion 35
-        versionCode 152
-        versionName "1.4-rosenweg.1"
+        versionCode 153
+        versionName "1.4-rosenweg.2"
     }
 
     signingConfigs {
@@ -52,6 +53,9 @@ android {
     dependencies {
         implementation 'androidx.media:media:1.6.0'
         implementation 'com.google.android.material:material:1.11.0'
+        // Rosenweg: Kamera-Scanner fuer den persoenlichen Anmelde-QR (Apache 2.0)
+        implementation('com.journeyapps:zxing-android-embedded:4.3.0') { transitive = false }
+        implementation 'com.google.zxing:core:3.5.3'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     }
 }
