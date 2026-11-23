@@ -133,6 +133,7 @@ public final class Katalog {
 			datei.delete();
 			throw new SecurityException("SHA-256 stimmt nicht: " + paket);
 		}
+		installationErlauben(c, true);
 		PackageInstaller pi = c.getPackageManager().getPackageInstaller();
 		PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
 		p.setAppPackageName(paket);
@@ -157,6 +158,30 @@ public final class Katalog {
 		Log.i(TAG, "Installation angestossen: " + paket);
 	}
 
+	/**
+	 * DISALLOW_INSTALL_APPS gilt auch fuer den Device Owner. Fuer die eigene
+	 * Installation kurz aufheben; InstallEmpfaenger setzt es danach wieder.
+	 * Sicherheitsnetz: nach 2 Minuten wird es in jedem Fall wieder gesetzt.
+	 */
+	static void installationErlauben(Context c, boolean erlauben) {
+		installationErlauben(c, erlauben, 0);
+	}
+
+	static void installationErlauben(Context c, boolean erlauben, long dauerMs) {
+		if (!Sperre.istDeviceOwner(c)) return;
+		try {
+			if (erlauben) {
+				Sperre.dpm(c).clearUserRestriction(Sperre.admin(c), android.os.UserManager.DISALLOW_INSTALL_APPS);
+				new android.os.Handler(android.os.Looper.getMainLooper())
+						.postDelayed(() -> installationErlauben(c, false), dauerMs > 0 ? dauerMs : 120_000);
+			} else {
+				Sperre.dpm(c).addUserRestriction(Sperre.admin(c), android.os.UserManager.DISALLOW_INSTALL_APPS);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "installationErlauben " + erlauben + ": " + e);
+		}
+	}
+
 	static void installiertGemerkt(Context c, String paket, String sha) {
 		java.util.Set<String> v = new java.util.HashSet<>(
 				Anlage.prefs(c).getStringSet(PREF_VERWALTET, new java.util.HashSet<>()));
@@ -178,6 +203,7 @@ public final class Katalog {
 		}
 		java.util.Set<String> bleibt = new java.util.HashSet<>();
 		PackageInstaller pi = c.getPackageManager().getPackageInstaller();
+		verwaltet.remove(c.getPackageName());   // sich selbst nie deinstallieren
 		for (String paket : verwaltet) {
 			if (imKatalog.contains(paket)) {
 				bleibt.add(paket);
@@ -235,6 +261,11 @@ public final class Katalog {
 			if (app == null || !"apk".equals(app.optString("art"))) continue;
 			String paket = app.optString("paket");
 			if (!installiert(c, paket)) continue;
+			if (app.optBoolean("immer", false)) {
+				// Werkzeug (Tastatur, Browser): bleibt sichtbar, Daten bleiben.
+				try { d.setApplicationHidden(a, paket, false); } catch (Exception ignored) {}
+				continue;
+			}
 			try {
 				d.setApplicationRestrictions(a, paket, new Bundle());
 				d.setApplicationHidden(a, paket, true);
@@ -271,7 +302,13 @@ public final class Katalog {
 	/** Nach einer Installation waehrend niemand angemeldet ist: gleich verstecken. */
 	static void nachInstallation(Context c, String paket) {
 		if (!Sperre.istDeviceOwner(c)) return;
-		boolean erlaubt = apkPakete(freigegeben(c)).contains(paket) && Anlage.angemeldet(c);
+		boolean immer = false;
+		JSONArray alle = katalog(c);
+		for (int i = 0; i < alle.length(); i++) {
+			JSONObject x = alle.optJSONObject(i);
+			if (x != null && paket.equals(x.optString("paket"))) immer = x.optBoolean("immer", false);
+		}
+		boolean erlaubt = immer || (apkPakete(freigegeben(c)).contains(paket) && Anlage.angemeldet(c));
 		try {
 			Sperre.dpm(c).setApplicationHidden(Sperre.admin(c), paket, !erlaubt);
 		} catch (Exception e) {

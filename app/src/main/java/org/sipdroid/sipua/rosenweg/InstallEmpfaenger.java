@@ -16,6 +16,7 @@ public class InstallEmpfaenger extends BroadcastReceiver {
 	public void onReceive(Context c, Intent i) {
 		int status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
 		String paket = i.getStringExtra(EXTRA_PAKET);
+		if (!i.getBooleanExtra(EXTRA_ENTFERNT, false)) Katalog.installationErlauben(c, false);
 		if (i.getBooleanExtra(EXTRA_ENTFERNT, false)) {
 			Log.i("RosenwegKatalog", "deinstalliert: " + paket + " (Status " + status + ")");
 			return;
@@ -24,6 +25,7 @@ public class InstallEmpfaenger extends BroadcastReceiver {
 			Log.i("RosenwegKatalog", "installiert: " + paket);
 			Katalog.installiertGemerkt(c, paket, i.getStringExtra(EXTRA_SHA));
 			Katalog.nachInstallation(c, paket);
+			Tastatur.anwenden(c);
 		} else if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
 			// Sollte als Device Owner nicht vorkommen. Nicht nachfragen: ein
 			// geteiltes Telefon hat niemanden, der das bestaetigt.

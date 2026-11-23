@@ -107,11 +107,18 @@ public final class Sperre {
 			d.addUserRestriction(a, UserManager.DISALLOW_FACTORY_RESET);
 			d.addUserRestriction(a, UserManager.DISALLOW_SAFE_BOOT);
 			d.addUserRestriction(a, UserManager.DISALLOW_ADD_USER);
+			// Niemand installiert nach (Play Store, Galaxy Store, OMC-Agent haben
+			// auf dem A15 nach der Einrichtung still LinkedIn, Office, Spiele
+			// nachgeschoben). Gilt auch fuer uns: Katalog.installieren hebt es nur
+			// fuer die eigene Installation kurz auf.
+			d.addUserRestriction(a, UserManager.DISALLOW_INSTALL_APPS);
+			d.addUserRestriction(a, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY);
 			// Bewusst NICHT DISALLOW_DEBUGGING_FEATURES: adb bleibt zum Einrichten.
 			String[] erlaubt = new String[ERLAUBT_GESPERRT.length + 1];
 			erlaubt[0] = c.getPackageName();
 			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
 			d.setLockTaskPackages(a, erlaubt);
+			Tastatur.anwenden(c);     // vor dem Ausblenden: die aktive Tastatur bleibt geschuetzt
 			Ausblenden.anwenden(c);   // gemerkte Liste, auch ohne Netz
 			if (Build.VERSION.SDK_INT >= 28) {
 				// Im gesperrten Zustand: keine Benachrichtigungen, kein Home/Overview,

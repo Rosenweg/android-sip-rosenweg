@@ -75,6 +75,30 @@ public final class Ausblenden {
 		return s;
 	}
 
+	private static boolean nachinstalliert(Context c, String p) {
+		try {
+			int flags = Build.VERSION.SDK_INT >= 24 ? android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES : 0;
+			android.content.pm.ApplicationInfo ai = c.getPackageManager().getApplicationInfo(p, flags);
+			return (ai.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private static void deinstallieren(Context c, String p) {
+		try {
+			Intent fertig = new Intent(c, InstallEmpfaenger.class).putExtra(InstallEmpfaenger.EXTRA_PAKET, p)
+					.putExtra(InstallEmpfaenger.EXTRA_ENTFERNT, true);
+			int f = android.app.PendingIntent.FLAG_UPDATE_CURRENT
+					| (Build.VERSION.SDK_INT >= 31 ? android.app.PendingIntent.FLAG_MUTABLE : 0);
+			c.getPackageManager().getPackageInstaller().uninstall(p,
+					android.app.PendingIntent.getBroadcast(c, p.hashCode(), fertig, f).getIntentSender());
+			Log.i(TAG, "deinstalliere: " + p);
+		} catch (Exception e) {
+			Log.w(TAG, "deinstallieren " + p + ": " + e);
+		}
+	}
+
 	/** Liste anwenden: ausblenden, was draufsteht; wieder einblenden, was nicht mehr draufsteht. */
 	static void anwenden(Context c) {
 		if (!Sperre.istDeviceOwner(c)) return;
@@ -99,6 +123,11 @@ public final class Ausblenden {
 		}
 		for (String p : soll) {
 			if (!Katalog.installiert(c, p)) continue;
+			if (nachinstalliert(c, p)) {
+				// Nicht Teil des Systems (Store-/OMC-Beigaben): ganz entfernen.
+				deinstallieren(c, p);
+				continue;
+			}
 			try {
 				if (d.setApplicationHidden(a, p, true) || d.isApplicationHidden(a, p)) {
 					jetzt.add(p);
