@@ -199,6 +199,7 @@ public class SperrActivity extends Activity {
 		@Override
 		public void run() {
 			if (!laeuft) return;
+			Sperre.homeSichern(SperrActivity.this);
 			if (!prueft && !loestEin) {
 				prueft = true;
 				new Thread(SperrActivity.this::pruefen).start();
@@ -314,7 +315,7 @@ public class SperrActivity extends Activity {
 		l.addView(titel);
 
 		TextView unter = text(15, grau, false);
-		unter.setText("Gesperrt · zum Telefonieren anmelden");
+		unter.setText("Gesperrt · zum Benutzen anmelden");
 		unter.setPadding(0, dp(4), 0, dp(18));
 		l.addView(unter);
 

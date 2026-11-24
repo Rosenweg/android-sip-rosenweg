@@ -66,6 +66,33 @@ public final class Sperre {
 		return new ComponentName(c.getPackageName(), SperrActivity.class.getPackage().getName() + ".SperrHome");
 	}
 
+	/**
+	 * Gesperrt muss die Home-Taste zum Sperrbildschirm fuehren. Nach einem Update der
+	 * Geraete-App raeumt Android deren Home-Voreinstellung auf — manchmal erst, nachdem
+	 * StartReceiver schon gesperrt hat (24.11.2026: Rosenweg Launcher lag danach offen).
+	 * Darum prueft die SperrActivity das laufend und setzt es bei Bedarf neu.
+	 * @return true, wenn neu gesetzt werden musste
+	 */
+	static boolean homeSichern(Context c) {
+		if (!istDeviceOwner(c) || Anlage.angemeldet(c)) return false;
+		Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+		android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
+		if (r != null && r.activityInfo != null && homeKomponente(c).getClassName().equals(r.activityInfo.name)
+				&& c.getPackageName().equals(r.activityInfo.packageName)) return false;
+		try {
+			homeAlias(c, true);
+			IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
+			home.addCategory(Intent.CATEGORY_HOME);
+			home.addCategory(Intent.CATEGORY_DEFAULT);
+			dpm(c).addPersistentPreferredActivity(admin(c), home, homeKomponente(c));
+			dpm(c).setStatusBarDisabled(admin(c), true);
+			Log.w(TAG, "Home zeigte nicht auf den Sperrbildschirm — neu gesetzt");
+		} catch (Exception e) {
+			Log.e(TAG, "homeSichern", e);
+		}
+		return true;
+	}
+
 	/** Der HOME-Alias ist nur gesperrt aktiv — sonst fragte Android nach dem Startbildschirm. */
 	private static void homeAlias(Context c, boolean an) {
 		c.getPackageManager().setComponentEnabledSetting(homeKomponente(c),
