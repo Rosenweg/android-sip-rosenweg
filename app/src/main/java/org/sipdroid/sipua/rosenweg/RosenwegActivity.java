@@ -127,14 +127,23 @@ public class RosenwegActivity extends Activity {
 		}
 		// Info mit den Urheberangaben — nach ADDITIONAL_TERMS.txt (Sipdroid) muss
 		// dieser Text unveraendert erreichbar bleiben.
+		// Der Sipdroid-Text bleibt unveraendert vorne (ADDITIONAL_TERMS.txt: Ergaenzungen
+		// nur am Ende), der Rosenweg-Teil kommt danach.
 		l.addView(kachel("Info", "#334155", () -> new AlertDialog.Builder(this)
-				.setTitle(getString(R.string.menu_about))
-				.setMessage(getString(R.string.about).replace("\\n", "\n"))
+				.setTitle("Über Rosenweg Gerät")
+				.setMessage(getString(R.string.about).replace("\\n", "\n") + ROSENWEG_INFO)
 				.setIcon(R.drawable.icon)
 				.setCancelable(true)
 				.show()), new LinearLayout.LayoutParams(kp));
 		return l;
 	}
+
+	private static final String ROSENWEG_INFO = "\n\n────────────\n"
+			+ "Rosenweg Gerät\n"
+			+ "Anpassung von Android SIP / Sipdroid für die geteilten Telefone der Rosenweg-Siedlung: "
+			+ "Anmeldung mit QR-Code oder NFC-Karte, Telefonie über die Rosenweg-Anlage, "
+			+ "persönliche PIN, App-Katalog und Einstellungen pro Person.\n"
+			+ "Quellcode: github.com/Rosenweg · Übersicht: rosenweg4303.ch/apps.html";
 
 	/**
 	 * Persoenliche PIN: liegt verschluesselt auf der Anlage und sperrt jedes
