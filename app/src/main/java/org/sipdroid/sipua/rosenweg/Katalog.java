@@ -100,6 +100,7 @@ public final class Katalog {
 			JSONArray apps = k.getJSONArray("apps");
 			Anlage.prefs(c).edit().putString(PREF_KATALOG, apps.toString()).apply();
 			Ausblenden.merkeListe(c, k.optJSONArray("ausblenden"));
+			Ausblenden.merkeUnsichtbar(c, k.optJSONArray("unsichtbar"));
 			Ausblenden.anwenden(c);
 			entfernteDeinstallieren(c, apkPakete(apps));
 			for (int i = 0; i < apps.length(); i++) {
@@ -291,7 +292,10 @@ public final class Katalog {
 			String paket = app.optString("paket");
 			if (!installiert(c, paket)) continue;
 			try {
-				d.setApplicationRestrictions(a, paket, bundle(app.optJSONObject("konfig")));
+				// Launcher: seine Einstellung ist die Liste "nur unsichtbar" — nicht ueberschreiben.
+				if (!Ausblenden.LAUNCHER.equals(paket)) {
+					d.setApplicationRestrictions(a, paket, bundle(app.optJSONObject("konfig")));
+				}
 				d.setApplicationHidden(a, paket, false);
 			} catch (Exception e) {
 				Log.w(TAG, "freigeben " + paket + ": " + e);

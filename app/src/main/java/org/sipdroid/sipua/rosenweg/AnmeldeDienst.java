@@ -77,6 +77,8 @@ public class AnmeldeDienst extends Service {
 			JSONObject s = Anlage.status(this);
 			fehlerInFolge = 0;
 			if (!s.optBoolean("angemeldet", false)) {
+				// Im Browser oder Admin abgemeldet: echtes Abmelden -> aufraeumen.
+				Aufraeumen.gemeinsamenSpeicherLeeren(this);
 				handler.post(() -> Sperre.sperren(this));
 			} else {
 				// Freigaben koennen sich im Admin geaendert haben: neu anwenden.
@@ -88,8 +90,11 @@ public class AnmeldeDienst extends Service {
 				Katalog.vielleichtAbgleichen(this, false);
 			}
 		} catch (Anlage.AnlageFehler e) {
-			// 401: Geraet nicht mehr als geteilt gefuehrt -> sperren.
-			if (e.status == 401) handler.post(() -> Sperre.sperren(this));
+			// 401: Geraet nicht mehr als geteilt gefuehrt -> sperren und aufraeumen.
+			if (e.status == 401) {
+				Aufraeumen.gemeinsamenSpeicherLeeren(this);
+				handler.post(() -> Sperre.sperren(this));
+			}
 		} catch (Exception e) {
 			// Netz weg: angemeldet bleiben (nur manuelle Abmeldung). Nur loggen.
 			fehlerInFolge++;
@@ -104,6 +109,7 @@ public class AnmeldeDienst extends Service {
 			Log.w(TAG, "Abmelden an der Anlage fehlgeschlagen: " + e);
 			// Trotzdem lokal sperren: wer abmelden drueckt, will das Geraet zu haben.
 		}
+		Aufraeumen.gemeinsamenSpeicherLeeren(this);
 		handler.post(() -> Sperre.sperren(this));
 	}
 

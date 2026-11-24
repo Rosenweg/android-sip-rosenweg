@@ -34,6 +34,8 @@ public final class Sperre {
 
 	/** Was im gesperrten Zustand laufen darf (Lock-Task-Allowlist). */
 	private static final String[] ERLAUBT_GESPERRT = {
+			// Rosenweg Phone (Fossify-Fork): Anruf-Bildschirm, sobald Standard-Telefon-App
+			"ch.rosenweg4303.phone",
 			// Samsung (Galaxy A15)
 			"com.samsung.android.incallui",      // Anruf-Bildschirm (eingehend annehmen)
 			"com.samsung.android.emergency",     // Notruf-Waehler, nur Notrufnummern
@@ -71,6 +73,70 @@ public final class Sperre {
 				PackageManager.DONT_KILL_APP);
 	}
 
+	/**
+	 * Text auf dem Android-Sperrbildschirm, unter "Dieses Geraet gehoert Rosenweg":
+	 * "Rosenweg Smartphone 2 · Stefan Mueller" bzw. "· nicht angemeldet".
+	 */
+	static void sperrbildschirmText(Context c) {
+		if (!istDeviceOwner(c) || Build.VERSION.SDK_INT < 24) return;
+		String wer = Anlage.angemeldet(c) && !Anlage.name(c).isEmpty() ? Anlage.name(c) : "nicht angemeldet";
+		try {
+			dpm(c).setDeviceOwnerLockScreenInfo(admin(c), Anlage.geraet(c) + " · " + wer);
+		} catch (Exception e) {
+			Log.w(TAG, "Sperrbildschirm-Text: " + e);
+		}
+	}
+
+	/** Rosenweg Launcher (Fossify-Fork) — sonst fragt Android bei zwei Launchern nach. */
+	static final String LAUNCHER_PAKET = "ch.rosenweg4303.home";
+
+	private static void rosenwegLauncherAlsHome(Context c, DevicePolicyManager d, ComponentName a) {
+		if (!Katalog.installiert(c, LAUNCHER_PAKET)) return;
+		try {
+			IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
+			home.addCategory(Intent.CATEGORY_HOME);
+			home.addCategory(Intent.CATEGORY_DEFAULT);
+			d.addPersistentPreferredActivity(a, home,
+					new ComponentName(LAUNCHER_PAKET, "org.fossify.home.activities.MainActivity"));
+		} catch (Exception e) {
+			Log.w(TAG, "Launcher als HOME: " + e);
+		}
+	}
+
+	static final String TELEFON_APP = "ch.rosenweg4303.phone";
+
+	/**
+	 * "Anrufen", "Waehlen" und tel:-Links gehen fest an Rosenweg Phone — ohne
+	 * Rueckfrage "Telefon oder Telefonanrufe". Notrufe nimmt Android trotzdem
+	 * zwingend ueber die System-Telefon-App (Telecom, EmergencyInCallServiceConnection);
+	 * die bleibt darum installiert, ist im Rosenweg Launcher aber unsichtbar.
+	 */
+	private static void telefonAppFestlegen(Context c, DevicePolicyManager d, ComponentName a) {
+		if (!Katalog.installiert(c, TELEFON_APP)) return;
+		ComponentName waehlen = new ComponentName(TELEFON_APP, "org.fossify.phone.activities.DialpadActivity");
+		ComponentName anrufen = new ComponentName(TELEFON_APP, "org.fossify.phone.activities.DialerActivity");
+		try {
+			IntentFilter dialOhne = new IntentFilter(Intent.ACTION_DIAL);
+			dialOhne.addCategory(Intent.CATEGORY_DEFAULT);
+			d.addPersistentPreferredActivity(a, dialOhne, waehlen);
+			IntentFilter dialTel = new IntentFilter(Intent.ACTION_DIAL);
+			dialTel.addCategory(Intent.CATEGORY_DEFAULT);
+			dialTel.addDataScheme("tel");
+			d.addPersistentPreferredActivity(a, dialTel, waehlen);
+			IntentFilter viewTel = new IntentFilter(Intent.ACTION_VIEW);
+			viewTel.addCategory(Intent.CATEGORY_DEFAULT);
+			viewTel.addCategory(Intent.CATEGORY_BROWSABLE);
+			viewTel.addDataScheme("tel");
+			d.addPersistentPreferredActivity(a, viewTel, waehlen);
+			IntentFilter callTel = new IntentFilter(Intent.ACTION_CALL);
+			callTel.addCategory(Intent.CATEGORY_DEFAULT);
+			callTel.addDataScheme("tel");
+			d.addPersistentPreferredActivity(a, callTel, anrufen);
+		} catch (Exception e) {
+			Log.w(TAG, "Telefon-App festlegen: " + e);
+		}
+	}
+
 	/** Einmalig nach dem Setzen als Device Owner (und bei jedem Start, idempotent). */
 	public static void grundregeln(Context c) {
 		if (!istDeviceOwner(c)) return;
@@ -102,8 +168,8 @@ public final class Sperre {
 			// SIM, auch ein Device Owner kann ihn nicht setzen.
 			if (Build.VERSION.SDK_INT >= 24) {
 				d.setOrganizationName(a, "Rosenweg");
-				d.setDeviceOwnerLockScreenInfo(a, "Rosenweg Telefon · Nebenstelle " + Anlage.nebenstelle(c));
 			}
+			sperrbildschirmText(c);
 			d.addUserRestriction(a, UserManager.DISALLOW_FACTORY_RESET);
 			d.addUserRestriction(a, UserManager.DISALLOW_SAFE_BOOT);
 			d.addUserRestriction(a, UserManager.DISALLOW_ADD_USER);
@@ -118,6 +184,7 @@ public final class Sperre {
 			erlaubt[0] = c.getPackageName();
 			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
 			d.setLockTaskPackages(a, erlaubt);
+			telefonAppFestlegen(c, d, a);
 			Tastatur.anwenden(c);     // vor dem Ausblenden: die aktive Tastatur bleibt geschuetzt
 			Ausblenden.anwenden(c);   // gemerkte Liste, auch ohne Netz
 			if (Build.VERSION.SDK_INT >= 28) {
@@ -135,6 +202,7 @@ public final class Sperre {
 	/** Niemand angemeldet: Sperrbildschirm als HOME, Lock-Task, Statusleiste aus. */
 	public static void sperren(Context c) {
 		Anlage.merke(c, false, null);
+		sperrbildschirmText(c);
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
@@ -161,6 +229,7 @@ public final class Sperre {
 	/** Angemeldet: normaler Startbildschirm zurueck, Apps der Person, Dienst mit Benachrichtigung. */
 	public static void freigeben(Context c, String name, org.json.JSONArray apps) {
 		Anlage.merke(c, true, name);
+		sperrbildschirmText(c);
 		Katalog.freigeben(c, apps != null ? apps : Katalog.freigegeben(c));
 		Receiver.updatePhoneAccount(c);
 		if (istDeviceOwner(c)) {
@@ -174,6 +243,7 @@ public final class Sperre {
 				d.setLockTaskPackages(a, new String[0]);
 				d.clearPackagePersistentPreferredActivities(a, c.getPackageName());
 				homeAlias(c, false);
+				rosenwegLauncherAlsHome(c, d, a);
 				d.setStatusBarDisabled(a, false);
 			} catch (Exception e) {
 				Log.e(TAG, "freigeben", e);

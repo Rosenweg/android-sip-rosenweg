@@ -46,8 +46,38 @@ public final class Ausblenden {
 
 	private Ausblenden() {}
 
+	private static final String PREF_UNSICHTBAR = "rosenweg_unsichtbar";
+	static final String LAUNCHER = "ch.rosenweg4303.home";
+
 	static void merkeListe(Context c, JSONArray liste) {
 		Anlage.prefs(c).edit().putString(PREF_LISTE, liste == null ? "[]" : liste.toString()).apply();
+	}
+
+	static void merkeUnsichtbar(Context c, JSONArray liste) {
+		if (liste == null) return;
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < liste.length(); i++) {
+			if (sb.length() > 0) sb.append(',');
+			sb.append(liste.optString(i));
+		}
+		Anlage.prefs(c).edit().putString(PREF_UNSICHTBAR, sb.toString()).apply();
+	}
+
+	/**
+	 * Liste "nur unsichtbar" an den Rosenweg Launcher geben (Managed Configuration).
+	 * Diese Apps bleiben installiert und funktionsfaehig (System-Telefon fuer Notrufe,
+	 * System-Kamera fuer IMAGE_CAPTURE), der Launcher zeigt sie nur nicht.
+	 */
+	static void launcherListeSetzen(Context c) {
+		if (!Sperre.istDeviceOwner(c) || !Katalog.installiert(c, LAUNCHER)) return;
+		try {
+			android.os.Bundle b = new android.os.Bundle();
+			b.putString("unsichtbar", Anlage.prefs(c).getString(PREF_UNSICHTBAR,
+					"com.samsung.android.dialer,com.sec.android.app.camera"));
+			Sperre.dpm(c).setApplicationRestrictions(Sperre.admin(c), LAUNCHER, b);
+		} catch (Exception e) {
+			Log.w(TAG, "Launcher-Liste: " + e);
+		}
 	}
 
 	private static Set<String> geschuetzt(Context c) {
@@ -137,6 +167,7 @@ public final class Ausblenden {
 			}
 		}
 		Anlage.prefs(c).edit().putStringSet(PREF_AUSGEBLENDET, jetzt).apply();
+		launcherListeSetzen(c);
 		Log.i(TAG, jetzt.size() + " Apps ausgeblendet");
 	}
 }

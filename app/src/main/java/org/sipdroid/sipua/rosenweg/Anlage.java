@@ -30,6 +30,13 @@ public final class Anlage {
 	public static final String PREF_API = "rosenweg_api";
 	public static final String PREF_ANGEMELDET = "rosenweg_angemeldet";
 	public static final String PREF_NAME = "rosenweg_name";
+	/** Name des Geraets laut Anlage (Name der Nebenstelle, z.B. "Rosenweg Smartphone 2"). */
+	public static final String PREF_GERAET = "rosenweg_geraet";
+
+	public static String geraet(Context c) {
+		String g = prefs(c).getString(PREF_GERAET, "");
+		return g.isEmpty() ? "Nebenstelle " + nebenstelle(c) : g;
+	}
 
 	private Anlage() {}
 
@@ -75,7 +82,11 @@ public final class Anlage {
 	/** GET /api/telefon/status -> {angemeldet, name, email, seit, apps}; merkt sich das Ergebnis. */
 	public static JSONObject status(Context c) throws Exception {
 		JSONObject s = anfrage(c, "GET", "/api/telefon/status");
+		if (!s.optString("geraet", "").isEmpty()) {
+			prefs(c).edit().putString(PREF_GERAET, s.optString("geraet")).apply();
+		}
 		merke(c, s.optBoolean("angemeldet", false), s.optString("name", ""));
+		Sperre.sperrbildschirmText(c);
 		return s;
 	}
 
