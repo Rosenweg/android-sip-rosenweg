@@ -301,7 +301,7 @@ public final class Katalog {
 	static final java.util.Map<String, String> LOESCHT_SELBST = java.util.Collections.singletonMap(
 			"ch.rosenweg4303.messages", "ch.rosenweg4303.messages.rosenweg.loeschen");
 
-	private static void selbstLoeschenLassen(Context c, DevicePolicyManager d, ComponentName a, String paket) {
+	private static void selbstLoeschenLassen(Context c, DevicePolicyManager d, ComponentName a, String paket, boolean ausblenden) {
 		Context app = c.getApplicationContext();
 		long start = System.currentTimeMillis();
 		app.sendBroadcast(new Intent("ch.rosenweg4303.ABGEMELDET").setPackage(paket)
@@ -320,9 +320,9 @@ public final class Katalog {
 			}
 			if (ok) {
 				Log.i(TAG, "Daten selbst geloescht " + paket + " (Sonderrechte bleiben)");
-				if (!Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
+				if (ausblenden && !Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
 			} else {
-				if (!Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
+				if (ausblenden && !Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
 				Log.w(TAG, "keine Loesch-Bestaetigung von " + paket + " - loesche komplett");
 				try {
 					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
@@ -351,6 +351,12 @@ public final class Katalog {
 				// Werkzeug (Tastatur, Browser): bleibt sichtbar, Daten bleiben — persoenliche
 				// Einstellungen/Verlauf vergisst die App selbst (z.B. Rosenweg Tastatur)
 				try { d.setApplicationHidden(a, paket, false); } catch (Exception ignored) {}
+				if (LOESCHT_SELBST.containsKey(paket)) {
+					// z.B. Messenger: bleibt sichtbar (Ausblenden setzt die Notfall-Sonderrechte
+					// zurueck), loescht die Daten der Person selbst und bestaetigt das.
+					selbstLoeschenLassen(c, d, a, paket, false);
+					continue;
+				}
 				c.sendBroadcast(new Intent("ch.rosenweg4303.ABGEMELDET").setPackage(paket),
 						"ch.rosenweg4303.permission.ANLAGE");
 				continue;
@@ -367,7 +373,7 @@ public final class Katalog {
 				if (app.optBoolean("persoenlich", true) && Build.VERSION.SDK_INT >= 28 && LOESCHT_SELBST.containsKey(paket)) {
 					// Erst loeschen lassen, dann ausblenden: eine ausgeblendete App bekommt keine
 					// Broadcasts und ihr Provider ist nicht erreichbar (selbstLoeschenLassen blendet aus).
-					selbstLoeschenLassen(c, d, a, paket);
+					selbstLoeschenLassen(c, d, a, paket, true);
 					continue;
 				}
 				d.setApplicationHidden(a, paket, true);
