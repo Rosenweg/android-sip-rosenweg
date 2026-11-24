@@ -30,7 +30,8 @@ public class StartReceiver extends BroadcastReceiver {
 		if (!Sperre.istDeviceOwner(c)) return;
 		Katalog.vielleichtAbgleichen(c, true);
 		Sperre.grundregeln(c);
-		if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)) {
+		if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
+				&& !Bildschirmsperre.abmeldungAusstehend(c)) {
 			// Update der Geraete-App waehrend jemand angemeldet ist: nicht abmelden,
 			// sondern die Anlage fragen und die Sitzung wiederherstellen.
 			sitzungBehalten(c.getApplicationContext(), goAsync());

@@ -27,6 +27,11 @@ public class SipdroidApp extends Application implements SharedPreferences.OnShar
                 System.exit(1);
             }
         });
+        // Rosenweg: vor dem ersten Entsperren nach einem Neustart laeuft nur
+        // BootEntsperren (directBootAware); die normalen Einstellungen sind dann
+        // noch verschluesselt und wuerden die App abstuerzen lassen.
+        if (android.os.Build.VERSION.SDK_INT >= 24
+                && !getSystemService(android.os.UserManager.class).isUserUnlocked()) return;
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         prefs.registerOnSharedPreferenceChangeListener(this);
         applyTheme(prefs.getString(PREF_THEME, THEME_SYSTEM));

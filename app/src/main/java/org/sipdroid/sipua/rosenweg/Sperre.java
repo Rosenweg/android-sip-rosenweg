@@ -201,6 +201,8 @@ public final class Sperre {
 
 	/** Niemand angemeldet: Sperrbildschirm als HOME, Lock-Task, Statusleiste aus. */
 	public static void sperren(Context c) {
+		Bildschirmsperre.entfernen(c);   // persoenliche PIN weg, bevor jemand anderes kommt
+		Bildschirmsperre.vorbereiten(c); // ohne Sperre ist ein neuer Schluessel sofort aktiv
 		Anlage.merke(c, false, null);
 		sperrbildschirmText(c);
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
@@ -252,5 +254,20 @@ public final class Sperre {
 		Intent dienst = new Intent(c, AnmeldeDienst.class);
 		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
 		else c.startService(dienst);
+		persoenlichePinSetzen(c.getApplicationContext());
+	}
+
+	/** Persoenliche PIN der angemeldeten Person von der Anlage holen und als Bildschirmsperre setzen. */
+	static void persoenlichePinSetzen(Context c) {
+		Bildschirmsperre.vorbereiten(c);
+		if (!Bildschirmsperre.bereit(c) || Bildschirmsperre.abmeldungAusstehend(c)) return;
+		new Thread(() -> {
+			try {
+				org.json.JSONObject p = Anlage.pin(c);
+				if (p.optBoolean("gesetzt") && Anlage.angemeldet(c)) Bildschirmsperre.setzen(c, p.optString("pin"));
+			} catch (Exception e) {
+				Log.w(TAG, "PIN holen: " + e);
+			}
+		}).start();
 	}
 }

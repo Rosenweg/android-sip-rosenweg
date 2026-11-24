@@ -213,6 +213,8 @@ public class SperrActivity extends Activity {
 				zeige("Dieses Telefon ist noch nicht eingerichtet.", true);
 				return;
 			}
+			// Neustart mit persoenlicher PIN: erst abmelden, nie wiederherstellen
+			if (!Bildschirmsperre.abmeldungAusfuehren(this)) return;
 			JSONObject s = Anlage.status(this);
 			if (s.optBoolean("angemeldet", false)) {
 				String name = s.optString("name", "");

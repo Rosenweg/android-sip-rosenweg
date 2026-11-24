@@ -115,6 +115,21 @@ public final class Anlage {
 				daten.toString());
 	}
 
+	/** GET /api/telefon/pin -> {gesetzt, pin} der angemeldeten Person (Bildschirmsperre). */
+	public static JSONObject pin(Context c) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/pin");
+	}
+
+	/** PUT /api/telefon/pin {pin} — 4 bis 12 Ziffern; Fehlertext kommt von der Anlage. */
+	public static void pinSetzen(Context c, String pin) throws Exception {
+		anfrage(c, "PUT", "/api/telefon/pin", new JSONObject().put("pin", pin).toString());
+	}
+
+	/** DELETE /api/telefon/pin */
+	public static void pinEntfernen(Context c) throws Exception {
+		anfrage(c, "DELETE", "/api/telefon/pin");
+	}
+
 	static void loescheVoicemails(Context c) {
 		java.io.File[] fs = new java.io.File(c.getCacheDir(), "voicemail").listFiles();
 		if (fs != null) for (java.io.File f : fs) f.delete();

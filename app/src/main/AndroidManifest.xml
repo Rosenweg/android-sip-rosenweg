@@ -82,6 +82,12 @@
 	        	<data android:path="ch.rosenweg4303.telefon" />
 	      	</intent-filter>
 	    </receiver>
+        <!-- Rosenweg: persoenliche PIN nach einem Neustart vor dem ersten Entsperren entfernen -->
+        <receiver android:name=".rosenweg.BootEntsperren" android:exported="true" android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <receiver android:name="org.sipdroid.sipua.ui.PhoneStart" android:exported="true" >
             <intent-filter>
                 <action android:name="com.androidsip.START_SIPDROID" />

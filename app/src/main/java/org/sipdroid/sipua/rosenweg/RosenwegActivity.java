@@ -9,7 +9,11 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -112,7 +116,10 @@ public class RosenwegActivity extends Activity {
 		LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
 		kp.topMargin = dp(10);
 		if (Anlage.angemeldet(this)) {
-			l.addView(kachel("Abmelden", "#DC2626", this::abmelden), kp);
+			if (Sperre.istDeviceOwner(this)) {
+				l.addView(kachel("Persönliche PIN", "#334155", this::pinDialog), kp);
+			}
+			l.addView(kachel("Abmelden", "#DC2626", this::abmelden), new LinearLayout.LayoutParams(kp));
 		}
 		if (!Sperre.istDeviceOwner(this)) {
 			l.addView(kachel("SIP-Einstellungen", "#334155",
@@ -127,6 +134,69 @@ public class RosenwegActivity extends Activity {
 				.setCancelable(true)
 				.show()), new LinearLayout.LayoutParams(kp));
 		return l;
+	}
+
+	/**
+	 * Persoenliche PIN: liegt verschluesselt auf der Anlage und sperrt jedes
+	 * geteilte Telefon, solange die Person dort angemeldet ist.
+	 */
+	private void pinDialog() {
+		LinearLayout f = new LinearLayout(this);
+		f.setOrientation(LinearLayout.VERTICAL);
+		f.setPadding(dp(24), dp(8), dp(24), 0);
+		EditText eins = pinFeld("Neue PIN (4–12 Ziffern)");
+		EditText zwei = pinFeld("PIN wiederholen");
+		f.addView(eins);
+		f.addView(zwei);
+		AlertDialog d = new AlertDialog.Builder(this)
+				.setTitle("Persönliche PIN")
+				.setMessage("Sperrt das Telefon, solange du angemeldet bist — auf jedem Rosenweg-Telefon. "
+						+ "Beim Abmelden wird sie wieder entfernt.")
+				.setView(f)
+				.setPositiveButton("Speichern", null)
+				.setNeutralButton("PIN entfernen", (x, w) -> pinAnlage(null))
+				.setNegativeButton("Abbrechen", null)
+				.show();
+		d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+			String pin = eins.getText().toString();
+			if (!pin.equals(zwei.getText().toString())) {
+				zwei.setError("Die beiden PINs sind verschieden.");
+				return;
+			}
+			d.dismiss();
+			pinAnlage(pin);
+		});
+	}
+
+	private EditText pinFeld(String hinweis) {
+		EditText e = new EditText(this);
+		e.setHint(hinweis);
+		e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+		e.setFilters(new InputFilter[]{new InputFilter.LengthFilter(12)});
+		return e;
+	}
+
+	/** pin == null: entfernen */
+	private void pinAnlage(String pin) {
+		new Thread(() -> {
+			String meldung;
+			try {
+				if (pin == null) {
+					Anlage.pinEntfernen(this);
+					Bildschirmsperre.entfernen(this);
+					meldung = "PIN entfernt.";
+				} else {
+					Anlage.pinSetzen(this, pin);
+					Bildschirmsperre.vorbereiten(this);
+					meldung = Bildschirmsperre.setzen(this, pin) ? "PIN gespeichert und aktiv."
+							: "PIN gespeichert, aber auf diesem Telefon nicht gesetzt.";
+				}
+			} catch (Exception e) {
+				meldung = e.getMessage();
+			}
+			String m = meldung;
+			runOnUiThread(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show());
+		}).start();
 	}
 
 	private void abmelden() {
