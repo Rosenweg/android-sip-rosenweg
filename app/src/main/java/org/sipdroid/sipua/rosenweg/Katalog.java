@@ -372,9 +372,9 @@ public final class Katalog {
 				}
 				d.setApplicationHidden(a, paket, false);
 				berechtigungenErteilen(c, d, a, paket);
-				// App Bescheid geben (z.B. Rosenweg Uhr: Einstellungen der Person sofort holen)
-				c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(paket)
-						.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)  // nach dem Daten-Loeschen sind die Apps gestoppt,
+				// App Bescheid geben (z.B. Rosenweg Uhr: Einstellungen der Person sofort holen).
+				// FLAG_INCLUDE_STOPPED_PACKAGES: nach dem Daten-Loeschen beim Abmelden sind die Apps gestoppt.
+				c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(paket).addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES),
 						"ch.rosenweg4303.permission.ANLAGE");
 			} catch (Exception e) {
 				Log.w(TAG, "freigeben " + paket + ": " + e);
