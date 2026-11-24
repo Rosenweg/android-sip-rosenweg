@@ -27,6 +27,7 @@ public class StartReceiver extends BroadcastReceiver {
 		// PACKAGE_REPLACED (alter Sipdroid-Weg) erreicht Manifest-Empfaenger seit
 		// Android 8 nicht mehr — nach einem Update waere das Telefon sonst stumm.
 		org.sipdroid.sipua.ui.Receiver.engine(c).register();
+		Nachlauf.starten(c);   // nach Neustart/Update: offene Dateien der letzten Person fertig hochladen
 		if (!Sperre.istDeviceOwner(c)) return;
 		Katalog.vielleichtAbgleichen(c, true);
 		Sperre.grundregeln(c);

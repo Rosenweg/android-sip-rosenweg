@@ -260,6 +260,7 @@ public final class Katalog {
 		if (!Sperre.istDeviceOwner(c)) return;
 		DevicePolicyManager d = Sperre.dpm(c);
 		ComponentName a = Sperre.admin(c);
+		java.util.Set<String> zurueck = new java.util.HashSet<>();
 		for (int i = 0; i < alle.length(); i++) {
 			JSONObject app = alle.optJSONObject(i);
 			if (app == null || !"apk".equals(app.optString("art"))) continue;
@@ -273,6 +274,13 @@ public final class Katalog {
 						"ch.rosenweg4303.permission.ANLAGE");
 				continue;
 			}
+			// Abmelden erst, wenn alles hochgeladen ist: Apps mit offenen Dateien
+			// bleiben, bis der Nachlauf sie aufraeumt (Nachlauf.java)
+			if (app.optBoolean("persoenlich", true) && (Nachlauf.enthaelt(c, paket) || Nachlauf.offen(c, paket) > 0)) {
+				zurueck.add(paket);
+				Nachlauf.anstossen(c, paket);
+				continue;
+			}
 			try {
 				d.setApplicationRestrictions(a, paket, new Bundle());
 				d.setApplicationHidden(a, paket, true);
@@ -284,6 +292,8 @@ public final class Katalog {
 				Log.w(TAG, "sperren " + paket + ": " + e);
 			}
 		}
+		if (zurueck.isEmpty() && !Nachlauf.aktiv(c)) Nachlauf.fertigMelden(c);   // Nextcloud-Zugang darf weg
+		else Nachlauf.vormerken(c, zurueck);
 		// Browser ausserhalb des Katalogs (Chrome): Verlauf, Cookies, Anmeldungen der Person weg
 		if (Build.VERSION.SDK_INT >= 28) {
 			for (String b : BROWSER_DATEN) {

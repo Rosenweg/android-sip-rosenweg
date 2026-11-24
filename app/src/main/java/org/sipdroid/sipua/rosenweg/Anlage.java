@@ -140,12 +140,18 @@ public final class Anlage {
 	 * beim Abmelden dort widerrufen). Null, wenn niemand angemeldet ist.
 	 */
 	public static JSONObject nextcloudKonto(Context c) throws Exception {
-		if (!angemeldet(c)) return null;
+		if (!angemeldet(c) && !Nachlauf.aktiv(c)) return null;   // Nachlauf: Zugang bis alles oben ist
 		JSONObject k = nextcloud;
 		if (k != null) return k;
 		k = anfrage(c, "GET", "/api/telefon/nextcloud");
 		nextcloud = k;
 		return k;
+	}
+
+	/** POST /api/telefon/nextcloud/fertig — nach dem Abmelden ist alles oben, Zugang widerrufen. */
+	static void nextcloudFertig(Context c) throws Exception {
+		nextcloud = null;
+		anfrage(c, "POST", "/api/telefon/nextcloud/fertig");
 	}
 
 	static void loescheVoicemails(Context c) {

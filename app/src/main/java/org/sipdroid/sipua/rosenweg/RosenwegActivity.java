@@ -200,6 +200,27 @@ public class RosenwegActivity extends Activity {
 	}
 
 	private void abmelden() {
+		// Abmelden erst, wenn alles hochgeladen ist (Stefan 24.11.2026)
+		new Thread(() -> {
+			java.util.Map<String, Integer> offen = Nachlauf.alleOffen(this);
+			runOnUiThread(() -> {
+				if (offen.isEmpty()) {
+					abmeldenBestaetigen();
+					return;
+				}
+				for (String p : offen.keySet()) new Thread(() -> Nachlauf.anstossen(this, p)).start();
+				new AlertDialog.Builder(this)
+						.setTitle("Noch nicht alles hochgeladen")
+						.setMessage(Nachlauf.beschreibung(this, offen) + ".\n\nDas Hochladen läuft. "
+								+ "Abmelden geht, sobald alles in der Nextcloud ist — nichts soll verloren gehen.")
+						.setPositiveButton("Nochmal prüfen", (d, w) -> abmelden())
+						.setNegativeButton("Schliessen", null)
+						.show();
+			});
+		}).start();
+	}
+
+	private void abmeldenBestaetigen() {
 		new AlertDialog.Builder(this)
 				.setMessage("Abmelden? Persönliche Daten in den Apps werden gelöscht.")
 				.setPositiveButton("Abmelden", (d, w) -> startService(

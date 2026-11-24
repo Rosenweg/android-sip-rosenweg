@@ -217,6 +217,10 @@ public class SperrActivity extends Activity {
 			// Neustart mit persoenlicher PIN: erst abmelden, nie wiederherstellen
 			if (!Bildschirmsperre.abmeldungAusfuehren(this)) return;
 			JSONObject s = Anlage.status(this);
+			if (s.optBoolean("angemeldet", false) && Nachlauf.aktiv(this)) {
+				zeige("Bitte kurz warten: Dateien der letzten Person werden noch hochgeladen.", true);
+				return;
+			}
 			if (s.optBoolean("angemeldet", false)) {
 				String name = s.optString("name", "");
 				runOnUiThread(() -> entsperrt(name, s.optJSONArray("apps")));
@@ -240,6 +244,11 @@ public class SperrActivity extends Activity {
 
 	private void entsperrt(String name, org.json.JSONArray apps) {
 		if (isFinishing()) return;
+		if (Nachlauf.aktiv(this)) {   // Daten der letzten Person sind noch da
+			zeige("Bitte kurz warten: Dateien der letzten Person werden noch hochgeladen.", true);
+			loestEin = false;
+			return;
+		}
 		laeuft = false;
 		handler.removeCallbacks(takt);
 		kamera.pause();

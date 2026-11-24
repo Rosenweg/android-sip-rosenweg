@@ -122,6 +122,11 @@ public class WebAppActivity extends Activity {
 			JSONObject r = Anlage.einloesen(this, inhalt);
 			if (r.optBoolean("angemeldet", false)) {
 				runOnUiThread(() -> {
+					if (Nachlauf.aktiv(this)) {
+						android.widget.Toast.makeText(this, "Bitte kurz warten: Dateien der letzten Person werden noch hochgeladen.", android.widget.Toast.LENGTH_LONG).show();
+						finish();
+						return;
+					}
 					Sperre.freigeben(this, r.optString("name", ""), r.optJSONArray("apps"));
 					setResult(RESULT_OK);
 					finish();
