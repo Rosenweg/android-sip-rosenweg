@@ -355,7 +355,7 @@ public final class Katalog {
 		for (int i = 0; i < alle.length(); i++) {
 			JSONObject app = alle.optJSONObject(i);
 			if (app == null || !app.optBoolean("immer", false) || !installiert(c, app.optString("paket"))) continue;
-			c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(app.optString("paket")),
+			c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(app.optString("paket")).addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES),
 					"ch.rosenweg4303.permission.ANLAGE");
 		}
 		DevicePolicyManager d = Sperre.dpm(c);
@@ -373,7 +373,8 @@ public final class Katalog {
 				d.setApplicationHidden(a, paket, false);
 				berechtigungenErteilen(c, d, a, paket);
 				// App Bescheid geben (z.B. Rosenweg Uhr: Einstellungen der Person sofort holen)
-				c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(paket),
+				c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(paket)
+						.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)  // nach dem Daten-Loeschen sind die Apps gestoppt,
 						"ch.rosenweg4303.permission.ANLAGE");
 			} catch (Exception e) {
 				Log.w(TAG, "freigeben " + paket + ": " + e);
