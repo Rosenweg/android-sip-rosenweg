@@ -53,10 +53,21 @@ public class Nachlauf extends Service {
 
 	// ---- Upload-Stand der Apps ----
 
-	/** Offene Dateien (wartend + fehlgeschlagen) einer App; 0 ohne Cloud-Bibliothek. */
+	/**
+	 * Offene Dateien (wartend + fehlgeschlagen) einer App; 0 ohne Cloud-Bibliothek.
+	 * Hat die App die Schnittstelle, antwortet aber nicht (haengt, abgestuerzt), gilt
+	 * sie als offen — im Zweifel nichts loeschen.
+	 */
 	public static int offen(Context c, String paket) {
 		Bundle b = rufen(c, paket, "status", 4);
-		return b == null ? 0 : b.getInt("ausstehend") + b.getInt("fehlgeschlagen");
+		if (b != null) return b.getInt("ausstehend") + b.getInt("fehlgeschlagen");
+		try {
+			if (c.getPackageManager().resolveContentProvider(paket + ".rosenweg.hochladen", 0) != null) {
+				Log.w(TAG, paket + ": keine Antwort, im Zweifel offen");
+				return 1;
+			}
+		} catch (Exception ignored) {}
+		return 0;
 	}
 
 	public static void anstossen(Context c, String paket) {
