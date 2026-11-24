@@ -140,6 +140,14 @@ public final class Sperre {
 	 */
 	private static void telefonAppFestlegen(Context c, DevicePolicyManager d, ComponentName a) {
 		if (!Katalog.installiert(c, TELEFON_APP)) return;
+		// Standard-Telefon-App (Rolle DIALER): ab Android 14 darf der Device Owner das selbst
+		if (Build.VERSION.SDK_INT >= 34) {
+			try {
+				d.setDefaultDialerApplication(TELEFON_APP);
+			} catch (Exception e) {
+				Log.w(TAG, "Standard-Telefon-App: " + e);
+			}
+		}
 		ComponentName waehlen = new ComponentName(TELEFON_APP, "org.fossify.phone.activities.DialpadActivity");
 		ComponentName anrufen = new ComponentName(TELEFON_APP, "org.fossify.phone.activities.DialerActivity");
 		try {
