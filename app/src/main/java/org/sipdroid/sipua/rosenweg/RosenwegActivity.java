@@ -67,7 +67,7 @@ public class RosenwegActivity extends Activity {
 		l.setPadding(dp(20), dp(36), dp(20), dp(20));
 
 		TextView titel = new TextView(this);
-		titel.setText("Rosenweg");
+		titel.setText(getString(R.string.app_name));
 		titel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
 		titel.setTypeface(Typeface.DEFAULT_BOLD);
 		titel.setTextColor(Color.parseColor("#E5E7EB"));
