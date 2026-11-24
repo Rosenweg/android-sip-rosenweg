@@ -81,6 +81,7 @@ public final class Sperre {
 				&& c.getPackageName().equals(r.activityInfo.packageName)) return false;
 		try {
 			homeAlias(c, true);
+			dpm(c).clearPackagePersistentPreferredActivities(admin(c), LAUNCHER_PAKET);
 			IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
 			home.addCategory(Intent.CATEGORY_HOME);
 			home.addCategory(Intent.CATEGORY_DEFAULT);
@@ -242,6 +243,7 @@ public final class Sperre {
 		sperrbildschirmText(c);
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
+		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
 		c.stopService(new Intent(c, AnmeldeDienst.class));
@@ -250,6 +252,8 @@ public final class Sperre {
 			ComponentName a = admin(c);
 			try {
 				homeAlias(c, true);
+				// Festlegung "Launcher = Home" vom Anmelden weg, sonst gewinnt sie
+				d.clearPackagePersistentPreferredActivities(a, LAUNCHER_PAKET);
 				IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
 				home.addCategory(Intent.CATEGORY_HOME);
 				home.addCategory(Intent.CATEGORY_DEFAULT);
@@ -292,11 +296,48 @@ public final class Sperre {
 		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
 		else c.startService(dienst);
 		persoenlichePinSetzen(c.getApplicationContext());
-		// Nextcloud-Zugang schon holen, damit die Apps ihn sofort haben
+		// Nextcloud-Zugang schon holen, damit die Apps ihn sofort haben; Einstellungen je nach Gruppe
 		Context app = c.getApplicationContext();
 		new Thread(() -> {
 			try { Anlage.nextcloudKonto(app); } catch (Exception e) { Log.w(TAG, "Nextcloud-Zugang: " + e); }
+			try {
+				org.json.JSONObject s = Anlage.status(app);
+				if (s.optBoolean("angemeldet")) einstellungenSperren(app, !s.optBoolean("technik"));
+			} catch (Exception e) {
+				einstellungenSperren(app, true);   // im Zweifel sperren
+			}
 		}).start();
+	}
+
+	/**
+	 * Gefaehrliche Einstellungen fuer alle ausser Technik/Praesident (Entscheid Stefan 24.11.2026):
+	 * Zuruecksetzen, Entwickleroptionen/USB-Debugging, Konten, Benutzer, App-Verwaltung,
+	 * abgesicherter Modus, Netzwerk-Reset. WLAN, Bildschirm, Ton bleiben offen.
+	 */
+	static final String[] GEFAEHRLICH = {
+			android.os.UserManager.DISALLOW_FACTORY_RESET,
+			android.os.UserManager.DISALLOW_DEBUGGING_FEATURES,
+			android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
+			android.os.UserManager.DISALLOW_ADD_USER,
+			android.os.UserManager.DISALLOW_APPS_CONTROL,
+			android.os.UserManager.DISALLOW_SAFE_BOOT,
+			android.os.UserManager.DISALLOW_NETWORK_RESET,
+			android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
+	};
+
+	static void einstellungenSperren(Context c, boolean sperren) {
+		if (!istDeviceOwner(c)) return;
+		DevicePolicyManager d = dpm(c);
+		ComponentName a = admin(c);
+		for (String r : GEFAEHRLICH) {
+			try {
+				if (sperren) d.addUserRestriction(a, r);
+				else d.clearUserRestriction(a, r);
+			} catch (Exception e) {
+				Log.w(TAG, "Einschraenkung " + r + ": " + e);
+			}
+		}
+		Log.i(TAG, "Gefaehrliche Einstellungen " + (sperren ? "gesperrt" : "offen"));
 	}
 
 	/** Rosenweg Launcher Bescheid geben (Startseite pro Person, RosenwegStartseite). */

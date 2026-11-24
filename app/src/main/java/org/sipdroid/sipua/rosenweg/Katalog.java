@@ -250,6 +250,9 @@ public final class Katalog {
 	}
 
 	/** Abmelden: alle Katalog-Apps verstecken, persoenliche Daten loeschen. */
+	/** Browser, deren Daten beim Abmelden geloescht werden (nicht synchronisierbar, Entscheid 24.11.2026). */
+	static final String[] BROWSER_DATEN = {"com.android.chrome"};
+
 	static void sperren(Context c) {
 		JSONArray alle = katalog(c);
 		merkeFreigegeben(c, null);
@@ -263,8 +266,11 @@ public final class Katalog {
 			String paket = app.optString("paket");
 			if (!installiert(c, paket)) continue;
 			if (app.optBoolean("immer", false)) {
-				// Werkzeug (Tastatur, Browser): bleibt sichtbar, Daten bleiben.
+				// Werkzeug (Tastatur, Browser): bleibt sichtbar, Daten bleiben — persoenliche
+				// Einstellungen/Verlauf vergisst die App selbst (z.B. Rosenweg Tastatur)
 				try { d.setApplicationHidden(a, paket, false); } catch (Exception ignored) {}
+				c.sendBroadcast(new Intent("ch.rosenweg4303.ABGEMELDET").setPackage(paket),
+						"ch.rosenweg4303.permission.ANLAGE");
 				continue;
 			}
 			try {
@@ -278,12 +284,32 @@ public final class Katalog {
 				Log.w(TAG, "sperren " + paket + ": " + e);
 			}
 		}
+		// Browser ausserhalb des Katalogs (Chrome): Verlauf, Cookies, Anmeldungen der Person weg
+		if (Build.VERSION.SDK_INT >= 28) {
+			for (String b : BROWSER_DATEN) {
+				if (!installiert(c, b)) continue;
+				try {
+					d.clearApplicationUserData(a, b, Executors.newSingleThreadExecutor(),
+							(p, ok) -> Log.i(TAG, "Browserdaten geloescht " + p + ": " + ok));
+				} catch (Exception e) {
+					Log.w(TAG, "Browserdaten " + b + ": " + e);
+				}
+			}
+		}
 	}
 
 	/** Anmelden: freigegebene Apps einblenden und einrichten. */
 	static void freigeben(Context c, JSONArray apps) {
 		merkeFreigegeben(c, apps);
 		if (!Sperre.istDeviceOwner(c) || apps == null) return;
+		// Werkzeuge (immer sichtbar) gehoeren nicht zur Liste der Person, bekommen die Anmeldung aber auch
+		JSONArray alle = katalog(c);
+		for (int i = 0; i < alle.length(); i++) {
+			JSONObject app = alle.optJSONObject(i);
+			if (app == null || !app.optBoolean("immer", false) || !installiert(c, app.optString("paket"))) continue;
+			c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(app.optString("paket")),
+					"ch.rosenweg4303.permission.ANLAGE");
+		}
 		DevicePolicyManager d = Sperre.dpm(c);
 		ComponentName a = Sperre.admin(c);
 		for (int i = 0; i < apps.length(); i++) {
@@ -298,6 +324,9 @@ public final class Katalog {
 				}
 				d.setApplicationHidden(a, paket, false);
 				berechtigungenErteilen(c, d, a, paket);
+				// App Bescheid geben (z.B. Rosenweg Uhr: Einstellungen der Person sofort holen)
+				c.sendBroadcast(new Intent("ch.rosenweg4303.ANGEMELDET").setPackage(paket),
+						"ch.rosenweg4303.permission.ANLAGE");
 			} catch (Exception e) {
 				Log.w(TAG, "freigeben " + paket + ": " + e);
 			}

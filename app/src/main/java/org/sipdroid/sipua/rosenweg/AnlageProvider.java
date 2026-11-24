@@ -128,7 +128,10 @@ public class AnlageProvider extends ContentProvider {
 	private Bundle ausfuehren(String method, String arg, Bundle extras) {
 		Bundle b = new Bundle();
 		try {
-			if ("nextcloud_konto".equals(method)) {
+			if ("angemeldet".equals(method)) {
+				// ohne Netz: zuletzt bekannter Stand (Launcher prueft das bei jedem Anzeigen)
+				b.putBoolean("angemeldet", Anlage.angemeldet(getContext()));
+			} else if ("nextcloud_konto".equals(method)) {
 				// Nextcloud-Zugang der angemeldeten Person fuer die Rosenweg-Apps (cloud-Bibliothek)
 				JSONObject k = Anlage.nextcloudKonto(getContext());
 				if (k != null) {
