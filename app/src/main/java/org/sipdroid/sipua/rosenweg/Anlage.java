@@ -83,6 +83,8 @@ public final class Anlage {
 			nextcloud = null;
 			messenger = null;
 		}
+		// Jede An- oder Abmeldung: der persoenliche SIP-Zugang ist ein neuer (bzw. weg)
+		sipPerson = null;
 		prefs(c).edit()
 				.putBoolean(PREF_ANGEMELDET, angemeldet)
 				.putString(PREF_NAME, angemeldet && name != null ? name : "")
@@ -124,6 +126,11 @@ public final class Anlage {
 	/** POST /api/telefon/karten/entziehen {uid} (Technik). */
 	public static JSONObject kartenEntziehen(Context c, String uid) throws Exception {
 		return anfrage(c, "POST", "/api/telefon/karten/entziehen", new JSONObject().put("uid", uid).toString(), 20000);
+	}
+
+	/** POST /api/telefon/karten/loeschen {uid} (Technik): nur nicht zugeordnete Karten, aus dem UniFi-Access-Bestand. */
+	public static JSONObject kartenLoeschen(Context c, String uid) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/karten/loeschen", new JSONObject().put("uid", uid).toString(), 20000);
 	}
 
 	/** GET /api/telefon/karten/personen -> {personen:[{name,email}]} (Technik). */
@@ -182,6 +189,22 @@ public final class Anlage {
 
 	private static volatile JSONObject nextcloud;   // nur im Speicher, nie auf die Platte
 	private static volatile JSONObject messenger;   // dito
+	private static volatile JSONObject sipPerson;   // dito
+
+	/**
+	 * Persoenlicher SIP-Zugang der angemeldeten Person fuer Rosenweg Telefon
+	 * (GET /api/telefon/sip-person): {server, port, transport, user, auth_user, password,
+	 * nummer, name}. Gilt nur fuer diese Sitzung; die Anlage loescht ihn beim Abmelden.
+	 * Null, wenn niemand angemeldet ist. AnlageFehler 404: keine persoenliche Nummer.
+	 */
+	public static JSONObject sipPerson(Context c) throws Exception {
+		if (!angemeldet(c)) return null;
+		JSONObject k = sipPerson;
+		if (k != null) return k;
+		k = anfrage(c, "GET", "/api/telefon/sip-person");
+		sipPerson = k;
+		return k;
+	}
 
 	/**
 	 * Rosenweg-Messenger-Zugang der angemeldeten Person (Anlage-Token, 12 h, vom message-store

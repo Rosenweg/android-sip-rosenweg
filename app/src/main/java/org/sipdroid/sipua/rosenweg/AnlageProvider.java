@@ -34,9 +34,17 @@ import java.util.TimeZone;
  *   call("einstellungen_holen", paket) -> {geaendert (long), werte (JSON-Text)}
  *   call("einstellungen_senden", paket, {geaendert, werte}) -> {uebernommen}
  *       Einstellungen einer App pro Person (Regel 7, gespeichert auf der Anlage)
+ *   call("sip_person", paket) -> {angemeldet (bool), server, port (int), transport (udp|tcp|tls),
+ *       user, auth_user, password, nummer, name}
+ *       Persoenlicher SIP-Zugang der angemeldeten Person fuer Rosenweg Telefon (gilt nur
+ *       fuer diese Sitzung). angemeldet=false: niemand angemeldet oder keine persoenliche
+ *       Nummer — Rosenweg Telefon meldet sich dann ab und vergisst den Zugang.
+ *       Server/Port/Transport sind die des Geraets (dieselbe Anlage, hier erprobt).
+ *       Aenderungen meldet die Geraete-App mit dem Broadcast ch.rosenweg4303.SIP_PERSON_GEAENDERT.
  *   call("karten_info", uid) -> {json: {found, assigned, status, display_id, person:{name,email}}}
  *   call("karten_zuordnen", uid, {email}) -> {json: {ok, display_id, name}}
  *   call("karten_entziehen", uid) -> {json: {ok}}
+ *   call("karten_loeschen", uid) -> {json: {ok}}  (nur nicht zugeordnete Karten: aus UniFi Access loeschen)
  *   call("karten_personen", "personen") -> {json: {personen:[{name,email}]}}
  *       Kartenverwaltung (App "Rosenweg Karten"): nur wenn die angemeldete Person Technik/
  *       Praesident ist (hier live geprueft, die Anlage prueft nochmals). Sonst
@@ -140,6 +148,8 @@ public class AnlageProvider extends ContentProvider {
 			if ("angemeldet".equals(method)) {
 				// ohne Netz: zuletzt bekannter Stand (Launcher prueft das bei jedem Anzeigen)
 				b.putBoolean("angemeldet", Anlage.angemeldet(getContext()));
+			} else if ("sip_person".equals(method)) {
+				return sipPerson();
 			} else if ("messenger_konto".equals(method)) {
 				// Rosenweg Messenger: Anlage-Token der angemeldeten Person
 				JSONObject k = Anlage.messengerKonto(getContext());
@@ -178,6 +188,46 @@ public class AnlageProvider extends ContentProvider {
 		return b;
 	}
 
+	/** Persoenlicher SIP-Zugang fuer Rosenweg Telefon (siehe Kopf). */
+	private Bundle sipPerson() {
+		android.content.Context c = getContext();
+		Bundle b = new Bundle();
+		b.putBoolean("angemeldet", false);
+		try {
+			JSONObject k = Anlage.sipPerson(c);
+			if (k == null || k.optString("password").isEmpty()) return b;
+			android.content.SharedPreferences p = Anlage.prefs(c);
+			String server = p.getString(org.sipdroid.sipua.ui.Settings.PREF_SERVER, "");
+			String port = p.getString(org.sipdroid.sipua.ui.Settings.PREF_PORT, "");
+			String transport = p.getString(org.sipdroid.sipua.ui.Settings.PREF_PROTOCOL, "");
+			b.putBoolean("angemeldet", true);
+			b.putString("server", server.isEmpty() ? k.optString("server") : server);
+			int pz;
+			try {
+				pz = port.isEmpty() ? k.optInt("port", 5060) : Integer.parseInt(port);
+			} catch (NumberFormatException e) {
+				pz = k.optInt("port", 5060);
+			}
+			b.putInt("port", pz);
+			b.putString("transport", transport.isEmpty() ? k.optString("transport", "tcp") : transport);
+			b.putString("user", k.optString("user"));
+			b.putString("auth_user", k.optString("auth_user", k.optString("user")));
+			b.putString("password", k.optString("password"));
+			b.putString("nummer", k.optString("nummer"));
+			b.putString("name", k.optString("name"));
+		} catch (Anlage.AnlageFehler e) {
+			// 404: niemand angemeldet / keine persoenliche Nummer -> angemeldet=false
+			if (e.status != 404) {
+				b.putString("fehler", String.valueOf(e.getMessage()));
+				b.putInt("status", e.status);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "sip_person: " + e.getClass().getSimpleName());   // nie den Zugang loggen
+			b.putString("fehler", "Keine Verbindung zur Anlage");
+		}
+		return b;
+	}
+
 	/** Kartenverwaltung fuer "Rosenweg Karten" (Technik/Praesident). */
 	private Bundle karten(String method, String arg, Bundle extras) {
 		Bundle b = new Bundle();
@@ -205,6 +255,9 @@ public class AnlageProvider extends ContentProvider {
 					break;
 				case "karten_entziehen":
 					r = Anlage.kartenEntziehen(c, arg);
+					break;
+				case "karten_loeschen":
+					r = Anlage.kartenLoeschen(c, arg);
 					break;
 				case "karten_personen":
 					r = Anlage.kartenPersonen(c);

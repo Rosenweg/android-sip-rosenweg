@@ -235,6 +235,22 @@ public final class Sperre {
 		}
 	}
 
+	static final String SIP_PERSON_GEAENDERT = "ch.rosenweg4303.SIP_PERSON_GEAENDERT";
+
+	/**
+	 * Rosenweg Telefon Bescheid geben: der persoenliche SIP-Zugang hat gewechselt (An-,
+	 * Ab- oder Ummelden). Es holt ihn dann ueber AnlageProvider.call("sip_person") neu.
+	 * Die Nebenstelle des Geraets (Sipdroid hier in der Geraete-App) bleibt davon unberuehrt.
+	 */
+	static void sipPersonGeaendert(Context c) {
+		try {
+			c.sendBroadcast(new Intent(SIP_PERSON_GEAENDERT).setPackage(TELEFON_APP)
+					.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES), "ch.rosenweg4303.permission.ANLAGE");
+		} catch (Exception e) {
+			Log.w(TAG, "SIP_PERSON_GEAENDERT: " + e);
+		}
+	}
+
 	/** Niemand angemeldet: Sperrbildschirm als HOME, Lock-Task, Statusleiste aus. */
 	public static void sperren(Context c) {
 		Bildschirmsperre.entfernen(c);   // persoenliche PIN weg, bevor jemand anderes kommt
@@ -247,6 +263,7 @@ public final class Sperre {
 		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
+		sipPersonGeaendert(c);    // Rosenweg Telefon: persoenliches SIP-Konto abmelden
 		c.stopService(new Intent(c, AnmeldeDienst.class));
 		if (istDeviceOwner(c)) {
 			DevicePolicyManager d = dpm(c);
@@ -276,6 +293,7 @@ public final class Sperre {
 		Katalog.freigeben(c, apps != null ? apps : Katalog.freigegeben(c));
 		startseite(c, "anmelden"); // Rosenweg Launcher: Startseite der Person laden
 		Receiver.updatePhoneAccount(c);
+		sipPersonGeaendert(c);    // nach Katalog.freigeben: Rosenweg Telefon ist dann sichtbar
 		if (istDeviceOwner(c)) {
 			DevicePolicyManager d = dpm(c);
 			ComponentName a = admin(c);
