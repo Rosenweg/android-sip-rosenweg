@@ -149,6 +149,18 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
+        <!-- NFC-Karte angetippt (UniFi-Access-Karten): Diagnose, spaeter Anmeldung per Karte. -->
+        <activity android:name=".rosenweg.NfcKarte"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+            <meta-data android:name="android.nfc.action.TECH_DISCOVERED" android:resource="@xml/nfc_karten" />
+        </activity>
         <receiver android:name=".rosenweg.InstallEmpfaenger" android:exported="false" />
         <!-- Wartung per USB: nur die adb-Shell hat DUMP. -->
         <receiver android:name=".rosenweg.AdbFreigabe" android:exported="true"
@@ -179,6 +191,7 @@
     </application>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 	<uses-permission android:name="android.permission.CAMERA"/>
+	<uses-permission android:name="android.permission.NFC"/>
 	<!-- Beim Abmelden den gemeinsamen Speicher (Fotos, Downloads ...) leeren.
 	     Einmalig per adb: appops set ch.rosenweg4303.telefon MANAGE_EXTERNAL_STORAGE allow -->
 	<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
