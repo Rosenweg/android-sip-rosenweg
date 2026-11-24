@@ -6,6 +6,8 @@ import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
@@ -29,6 +31,9 @@ import java.util.TimeZone;
  *       dauer (s), voicemail (Zusammenfassung), voicemail_audio (0/1), ueber (Nebenstelle)
  *   content://ch.rosenweg4303.telefon.anlage/voicemail/<id>
  *       persoenliche Voicemail als WAV (openFile)
+ *   call("einstellungen_holen", paket) -> {geaendert (long), werte (JSON-Text)}
+ *   call("einstellungen_senden", paket, {geaendert, werte}) -> {uebernommen}
+ *       Einstellungen einer App pro Person (Regel 7, gespeichert auf der Anlage)
  *
  * Blockiert (Netz): nicht vom UI-Thread aufrufen.
  */
@@ -98,6 +103,33 @@ public class AnlageProvider extends ContentProvider {
 			throw new FileNotFoundException(e.getMessage());
 		}
 		return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
+	}
+
+	@Override
+	public Bundle call(String method, String arg, Bundle extras) {
+		// call() prueft die readPermission NICHT von selbst
+		if (getContext().checkCallingPermission("ch.rosenweg4303.permission.ANLAGE") != PackageManager.PERMISSION_GRANTED) {
+			throw new SecurityException("Nur Rosenweg-Apps");
+		}
+		Bundle b = new Bundle();
+		if (arg == null || arg.isEmpty() || !Anlage.eingerichtet(getContext())) return b;
+		try {
+			if ("einstellungen_holen".equals(method)) {
+				JSONObject d = Anlage.einstellungen(getContext(), arg);
+				b.putLong("geaendert", d.optLong("geaendert"));
+				JSONObject w = d.optJSONObject("werte");
+				b.putString("werte", w == null ? "{}" : w.toString());
+			} else if ("einstellungen_senden".equals(method) && extras != null) {
+				JSONObject daten = new JSONObject()
+						.put("geaendert", extras.getLong("geaendert"))
+						.put("werte", new JSONObject(extras.getString("werte", "{}")));
+				b.putBoolean("uebernommen", Anlage.einstellungenSenden(getContext(), arg, daten).optBoolean("uebernommen"));
+			}
+		} catch (Exception e) {
+			Log.w(TAG, method + ": " + e);
+			b.putString("fehler", String.valueOf(e.getMessage()));
+		}
+		return b;
 	}
 
 	@Override
