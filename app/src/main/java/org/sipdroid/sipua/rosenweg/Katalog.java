@@ -291,6 +291,47 @@ public final class Katalog {
 	/** Browser, deren Daten beim Abmelden geloescht werden (nicht synchronisierbar, Entscheid 24.11.2026). */
 	static final String[] BROWSER_DATEN = {"com.android.chrome"};
 
+	/**
+	 * Apps, die ihre Daten beim Abmelden selbst loeschen (Paket -> Authority ihres Bestaetigungs-
+	 * Providers). clearApplicationUserData setzt auch die per adb erteilten Sonderrechte zurueck
+	 * (Vollbild ueber der Sperre, exakte Wecker, "Nicht stoeren", Akku-Ausnahme) — fuer den
+	 * Notfall-Alarm des Messengers unbrauchbar. Bestaetigt die App das Loeschen nicht innert
+	 * 10 s, wird wie bisher komplett geloescht (Datenschutz vor Komfort).
+	 */
+	static final java.util.Map<String, String> LOESCHT_SELBST = java.util.Collections.singletonMap(
+			"ch.rosenweg4303.messages", "ch.rosenweg4303.messages.rosenweg.loeschen");
+
+	private static void selbstLoeschenLassen(Context c, DevicePolicyManager d, ComponentName a, String paket) {
+		Context app = c.getApplicationContext();
+		long start = System.currentTimeMillis();
+		app.sendBroadcast(new Intent("ch.rosenweg4303.ABGEMELDET").setPackage(paket)
+				.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES), "ch.rosenweg4303.permission.ANLAGE");
+		new Thread(() -> {
+			boolean ok = false;
+			android.net.Uri uri = android.net.Uri.parse("content://" + LOESCHT_SELBST.get(paket));
+			for (int i = 0; i < 20 && !ok; i++) {
+				try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+				try {
+					Bundle r = app.getContentResolver().call(uri, "gewischt", null, null);
+					ok = r != null && r.getBoolean("ok", false) && r.getLong("zeit", 0) >= start - 2000;
+				} catch (Exception ignored) {
+					// Provider noch nicht bereit oder App alt: weiter warten, dann komplett loeschen
+				}
+			}
+			if (ok) {
+				Log.i(TAG, "Daten selbst geloescht " + paket + " (Sonderrechte bleiben)");
+			} else {
+				Log.w(TAG, "keine Loesch-Bestaetigung von " + paket + " - loesche komplett");
+				try {
+					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
+							(p, erfolg) -> Log.i(TAG, "Daten geloescht " + p + ": " + erfolg));
+				} catch (Exception e) {
+					Log.w(TAG, "clearApplicationUserData " + paket + ": " + e);
+				}
+			}
+		}, "SelbstLoeschen-" + paket).start();
+	}
+
 	static void sperren(Context c) {
 		JSONArray alle = katalog(c);
 		merkeFreigegeben(c, null);
@@ -323,7 +364,8 @@ public final class Katalog {
 				d.setApplicationRestrictions(a, paket, new Bundle());
 				d.setApplicationHidden(a, paket, true);
 				if (app.optBoolean("persoenlich", true) && Build.VERSION.SDK_INT >= 28) {
-					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
+					if (LOESCHT_SELBST.containsKey(paket)) selbstLoeschenLassen(c, d, a, paket);
+					else d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
 							(p, ok) -> Log.i(TAG, "Daten geloescht " + p + ": " + ok));
 				}
 			} catch (Exception e) {
