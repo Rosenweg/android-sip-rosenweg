@@ -320,7 +320,9 @@ public final class Katalog {
 			}
 			if (ok) {
 				Log.i(TAG, "Daten selbst geloescht " + paket + " (Sonderrechte bleiben)");
+				if (!Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
 			} else {
+				if (!Anlage.angemeldet(app)) try { d.setApplicationHidden(a, paket, true); } catch (Exception e) { Log.w(TAG, "ausblenden " + paket + ": " + e); }
 				Log.w(TAG, "keine Loesch-Bestaetigung von " + paket + " - loesche komplett");
 				try {
 					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
@@ -362,10 +364,15 @@ public final class Katalog {
 			}
 			try {
 				d.setApplicationRestrictions(a, paket, new Bundle());
+				if (app.optBoolean("persoenlich", true) && Build.VERSION.SDK_INT >= 28 && LOESCHT_SELBST.containsKey(paket)) {
+					// Erst loeschen lassen, dann ausblenden: eine ausgeblendete App bekommt keine
+					// Broadcasts und ihr Provider ist nicht erreichbar (selbstLoeschenLassen blendet aus).
+					selbstLoeschenLassen(c, d, a, paket);
+					continue;
+				}
 				d.setApplicationHidden(a, paket, true);
 				if (app.optBoolean("persoenlich", true) && Build.VERSION.SDK_INT >= 28) {
-					if (LOESCHT_SELBST.containsKey(paket)) selbstLoeschenLassen(c, d, a, paket);
-					else d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
+					d.clearApplicationUserData(a, paket, Executors.newSingleThreadExecutor(),
 							(p, ok) -> Log.i(TAG, "Daten geloescht " + p + ": " + ok));
 				}
 			} catch (Exception e) {
