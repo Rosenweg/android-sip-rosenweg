@@ -149,7 +149,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
-        <!-- NFC-Karte angetippt (UniFi-Access-Karten): Diagnose, spaeter Anmeldung per Karte. -->
+        <!-- NFC-Karte angetippt (UniFi-Access-Karten), waehrend nicht der Sperrbildschirm vorne ist: Anmeldung per Karte. -->
         <activity android:name=".rosenweg.NfcKarte"
             android:exported="true"
             android:excludeFromRecents="true"
@@ -204,6 +204,7 @@
 	     sie bei jedem Abgleich neu. Kein Play-Store-Vertrieb, daher unbedenklich. -->
 	<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
 	<uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+	<uses-feature android:name="android.hardware.nfc" android:required="false"/>
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 	<uses-permission android:name="android.permission.INTERNET"/>
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>

@@ -86,6 +86,37 @@ public final class Anlage {
 		return r;
 	}
 
+	/**
+	 * POST /api/telefon/karte {uid} — NFC-Karte (UniFi Access) einloesen. Gleiche Antwort wie
+	 * einloesen; Fehlertexte der Anlage: "Karte nicht bekannt", "Karte gesperrt", ...
+	 */
+	public static JSONObject karte(Context c, String uid) throws Exception {
+		JSONObject r = anfrage(c, "POST", "/api/telefon/karte", new JSONObject().put("uid", uid).toString(), 20000);
+		merke(c, r.optBoolean("angemeldet", false), r.optString("name", ""));
+		return r;
+	}
+
+	/** POST /api/telefon/karten/info {uid} -> {found, assigned, status, display_id, person:{name,email}} (Technik). */
+	public static JSONObject kartenInfo(Context c, String uid) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/karten/info", new JSONObject().put("uid", uid).toString(), 20000);
+	}
+
+	/** POST /api/telefon/karten/zuordnen {uid, email} (Technik). */
+	public static JSONObject kartenZuordnen(Context c, String uid, String email) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/karten/zuordnen",
+				new JSONObject().put("uid", uid).put("email", email).toString(), 20000);
+	}
+
+	/** POST /api/telefon/karten/entziehen {uid} (Technik). */
+	public static JSONObject kartenEntziehen(Context c, String uid) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/karten/entziehen", new JSONObject().put("uid", uid).toString(), 20000);
+	}
+
+	/** GET /api/telefon/karten/personen -> {personen:[{name,email}]} (Technik). */
+	public static JSONObject kartenPersonen(Context c) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/karten/personen", "{}", 20000);
+	}
+
 	/** GET /api/telefon/status -> {angemeldet, name, email, seit, apps}; merkt sich das Ergebnis. */
 	public static JSONObject status(Context c) throws Exception {
 		JSONObject s = anfrage(c, "GET", "/api/telefon/status");
@@ -211,6 +242,11 @@ public final class Anlage {
 	}
 
 	private static JSONObject anfrage(Context c, String methode, String pfad, String koerper) throws Exception {
+		return anfrage(c, methode, pfad, koerper, 8000);
+	}
+
+	/** lesenMs: Karten-Anfragen gehen bis UniFi Access (Import, Abgleich) und brauchen laenger. */
+	private static JSONObject anfrage(Context c, String methode, String pfad, String koerper, int lesenMs) throws Exception {
 		SharedPreferences p = prefs(c);
 		String basis = p.getString(PREF_API, API_STANDARD);
 		String zugang = p.getString(Settings.PREF_USERNAME, "") + ":" + p.getString(Settings.PREF_PASSWORD, "");
@@ -218,7 +254,7 @@ public final class Anlage {
 		try {
 			v.setRequestMethod(methode);
 			v.setConnectTimeout(8000);
-			v.setReadTimeout(8000);
+			v.setReadTimeout(lesenMs);
 			v.setUseCaches(false);
 			v.setRequestProperty("Accept", "application/json");
 			v.setRequestProperty("Authorization", "Basic "

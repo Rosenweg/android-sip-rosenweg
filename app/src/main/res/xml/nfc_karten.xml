@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Jede gaengige Kartenart: NfcKarte meldet die UID (Diagnose fuer die Anmeldung per Karte). -->
+<!-- Jede gaengige Kartenart: NfcKarte liest die UID (Anmeldung per Karte). -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <tech-list><tech>android.nfc.tech.NfcA</tech></tech-list>
     <tech-list><tech>android.nfc.tech.NfcB</tech></tech-list>

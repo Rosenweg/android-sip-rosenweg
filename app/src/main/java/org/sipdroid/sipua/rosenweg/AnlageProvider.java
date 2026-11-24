@@ -34,6 +34,13 @@ import java.util.TimeZone;
  *   call("einstellungen_holen", paket) -> {geaendert (long), werte (JSON-Text)}
  *   call("einstellungen_senden", paket, {geaendert, werte}) -> {uebernommen}
  *       Einstellungen einer App pro Person (Regel 7, gespeichert auf der Anlage)
+ *   call("karten_info", uid) -> {json: {found, assigned, status, display_id, person:{name,email}}}
+ *   call("karten_zuordnen", uid, {email}) -> {json: {ok, display_id, name}}
+ *   call("karten_entziehen", uid) -> {json: {ok}}
+ *   call("karten_personen", "personen") -> {json: {personen:[{name,email}]}}
+ *       Kartenverwaltung (App "Rosenweg Karten"): nur wenn die angemeldete Person Technik/
+ *       Praesident ist (hier live geprueft, die Anlage prueft nochmals). Sonst
+ *       {fehler: "nicht berechtigt", nicht_berechtigt: true}. Fehler der Anlage: {fehler, status}.
  *
  * Blockiert (Netz): nicht vom UI-Thread aufrufen.
  */
@@ -151,6 +158,8 @@ public class AnlageProvider extends ContentProvider {
 					b.putString("benutzer", k.optString("benutzer"));
 					b.putString("app_passwort", k.optString("app_passwort"));
 				}
+			} else if (method != null && method.startsWith("karten_")) {
+				return karten(method, arg, extras);
 			} else if ("einstellungen_holen".equals(method)) {
 				JSONObject d = Anlage.einstellungen(getContext(), arg);
 				b.putLong("geaendert", d.optLong("geaendert"));
@@ -165,6 +174,53 @@ public class AnlageProvider extends ContentProvider {
 		} catch (Exception e) {
 			Log.w(TAG, method + ": " + e);
 			b.putString("fehler", String.valueOf(e.getMessage()));
+		}
+		return b;
+	}
+
+	/** Kartenverwaltung fuer "Rosenweg Karten" (Technik/Praesident). */
+	private Bundle karten(String method, String arg, Bundle extras) {
+		Bundle b = new Bundle();
+		android.content.Context c = getContext();
+		try {
+			// Live statt gemerkt: nach einem Personenwechsel ist PREF_TECHNIK kurz noch der alte Stand
+			JSONObject s = Anlage.status(c);
+			if (!s.optBoolean("angemeldet") || !s.optBoolean("technik")) {
+				b.putString("fehler", "nicht berechtigt");
+				b.putBoolean("nicht_berechtigt", true);
+				return b;
+			}
+			JSONObject r;
+			switch (method) {
+				case "karten_info":
+					r = Anlage.kartenInfo(c, arg);
+					break;
+				case "karten_zuordnen":
+					String email = extras == null ? "" : extras.getString("email", "");
+					if (email.isEmpty()) {
+						b.putString("fehler", "E-Mail fehlt");
+						return b;
+					}
+					r = Anlage.kartenZuordnen(c, arg, email);
+					break;
+				case "karten_entziehen":
+					r = Anlage.kartenEntziehen(c, arg);
+					break;
+				case "karten_personen":
+					r = Anlage.kartenPersonen(c);
+					break;
+				default:
+					b.putString("fehler", "unbekannte Methode");
+					return b;
+			}
+			b.putString("json", r.toString());
+		} catch (Anlage.AnlageFehler e) {
+			b.putString("fehler", String.valueOf(e.getMessage()));
+			b.putInt("status", e.status);
+			if (e.status == 403 && "nicht berechtigt".equals(e.getMessage())) b.putBoolean("nicht_berechtigt", true);
+		} catch (Exception e) {
+			Log.w(TAG, method + ": " + e);
+			b.putString("fehler", "Keine Verbindung zur Anlage");
 		}
 		return b;
 	}

@@ -1,30 +1,46 @@
 package org.sipdroid.sipua.rosenweg;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.nfc.NfcAdapter;
-import android.nfc.NdefMessage;
-import android.nfc.NdefRecord;
 import android.nfc.Tag;
-import android.nfc.tech.MifareUltralight;
-import android.nfc.tech.Ndef;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
+import android.widget.Toast;
 
 /**
- * NFC-Karte angetippt (Diagnose, Vorstufe zur Anmeldung per Karte).
+ * Anmeldung per NFC-Karte (UniFi-Access-Karten der Rosenweg-Tueren).
  *
- * Rosenweg nutzt fuer UniFi Access normale NFC-Karten: Die Leser werten nur die
- * Seriennummer (UID) aus, und UniFi Access speichert dazu ein 64-stelliges Token
- * (vermutlich SHA-256 der UID). Diese Activity schreibt Kartentyp und UID ins Log,
- * damit sich pruefen laesst, wie das Token aus der UID entsteht. Sie hat keine
- * Oberflaeche und schliesst sich sofort.
+ * Gelesen wird nur die Seriennummer (UID, Tag.getId() als Hex, z.B. 04D4C227C22A81) —
+ * dieselbe Zahl, die UniFi Access als nfc_id fuehrt. Die Anlage fragt bei jeder
+ * Anmeldung live in Access nach, wem die Karte gehoert; entzogene Karten gelten sofort
+ * nicht mehr. Die Karte allein meldet an (Entscheid Stefan 24.11.2026).
  *
- * Spaeter: Anlage fragt "wem gehoert diese Karte" (UniFi Access ist die einzige
- * Quelle, gesperrte Karten gelten auch hier nicht mehr), Anmeldung mit Karte + PIN.
+ * Diese Activity bekommt TECH_DISCOVERED, wenn gerade nicht die SperrActivity vorne ist
+ * (die liest Karten selbst im Reader-Modus). Niemand angemeldet: anmelden. Schon
+ * angemeldet: Karte ignorieren (die Kartenverwaltung ist die eigene App "Rosenweg Karten"
+ * und liest im Vordergrund selbst). Keine Oberflaeche, schliesst sich sofort.
  */
 public class NfcKarte extends Activity {
 	private static final String TAG = "RosenwegNfc";
+	/** Reader-Modus: alle Kartentypen, NDEF nicht pruefen (nur die UID zaehlt). */
+	public static final int LESER_FLAGS = NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B
+			| NfcAdapter.FLAG_READER_NFC_F | NfcAdapter.FLAG_READER_NFC_V | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+
+	private static volatile boolean laeuft;
+	private static String zuletzt;
+	private static long zuletztUm;
+
+	/** Rueckmeldung einer Kartenanmeldung (im UI-Thread). */
+	public interface Ergebnis {
+		void angemeldet(org.json.JSONObject antwort);
+
+		void fehler(String meldung);
+	}
 
 	@Override
 	protected void onCreate(Bundle b) {
@@ -40,59 +56,72 @@ public class NfcKarte extends Activity {
 		finish();
 	}
 
-	static void auswerten(Intent i) {
+	private void auswerten(Intent i) {
 		if (i == null) return;
 		Tag tag = i.getParcelableExtra(NfcAdapter.EXTRA_TAG);
-		if (tag == null) return;
-		melde(tag);
+		String uid = uid(tag);
+		if (uid == null) return;
+		Context app = getApplicationContext();
+		if (Anlage.angemeldet(app) || !Anlage.eingerichtet(app)) {
+			Log.i(TAG, "Karte ignoriert (schon angemeldet oder nicht eingerichtet)");
+			return;
+		}
+		anmelden(app, uid, new Ergebnis() {
+			@Override
+			public void angemeldet(org.json.JSONObject r) {
+				// wie die Anmeldung im Anmeldefenster (WebAppActivity)
+				if (Nachlauf.aktiv(app)) {
+					Toast.makeText(app, "Bitte kurz warten: Dateien der letzten Person werden noch hochgeladen.",
+							Toast.LENGTH_LONG).show();
+					return;
+				}
+				Sperre.freigeben(app, r.optString("name", ""), r.optJSONArray("apps"));
+			}
+
+			@Override
+			public void fehler(String meldung) {
+				Toast.makeText(app, meldung, Toast.LENGTH_LONG).show();
+			}
+		});
 	}
 
-	static void melde(Tag tag) {
-		byte[] id = tag.getId();
+	/** UID der Karte als Hex in Grossbuchstaben, null ohne Karte. */
+	public static String uid(Tag tag) {
+		if (tag == null || tag.getId() == null || tag.getId().length == 0) return null;
 		StringBuilder hex = new StringBuilder();
-		for (byte x : id) hex.append(String.format("%02X", x));
-		StringBuilder techs = new StringBuilder();
-		for (String t : tag.getTechList()) techs.append(t.substring(t.lastIndexOf('.') + 1)).append(' ');
-		Log.i(TAG, "Karte: uid=" + hex + " laenge=" + id.length + " techs=" + techs.toString().trim());
-		// Nur lesen, nie schreiben: was steht sonst auf der Karte (UniFi liest evtl. nicht nur die UID)?
+		for (byte x : tag.getId()) hex.append(String.format("%02X", x));
+		return hex.toString();
+	}
+
+	/**
+	 * Karte an der Anlage einloesen (eigener Thread); Ergebnis im UI-Thread. Dieselbe Karte
+	 * wird innert 4 s nur einmal eingeloest (der Leser meldet sie mehrfach).
+	 */
+	public static void anmelden(Context c, String uid, Ergebnis ergebnis) {
+		synchronized (NfcKarte.class) {
+			long jetzt = SystemClock.elapsedRealtime();
+			if (laeuft || (uid.equals(zuletzt) && jetzt - zuletztUm < 4000)) return;
+			laeuft = true;
+			zuletzt = uid;
+			zuletztUm = jetzt;
+		}
+		Handler ui = new Handler(Looper.getMainLooper());
+		Log.i(TAG, "Karte gelesen, Anmeldung an der Anlage (" + uid.length() / 2 + " Byte UID)");
 		new Thread(() -> {
-			Ndef ndef = Ndef.get(tag);
-			if (ndef != null) {
-				try {
-					ndef.connect();
-					NdefMessage m = ndef.getNdefMessage();
-					Log.i(TAG, "NDEF: typ=" + ndef.getType() + " max=" + ndef.getMaxSize() + " schreibbar=" + ndef.isWritable()
-							+ " saetze=" + (m == null ? 0 : m.getRecords().length));
-					if (m != null) for (NdefRecord r : m.getRecords()) {
-						Log.i(TAG, "NDEF-Satz: tnf=" + r.getTnf() + " typ=" + new String(r.getType()) + " id=" + hexOf(r.getId())
-								+ " laenge=" + r.getPayload().length + " daten=" + hexOf(r.getPayload()));
-					}
-				} catch (Exception e) {
-					Log.w(TAG, "NDEF lesen: " + e);
-				} finally {
-					try { ndef.close(); } catch (Exception ignored) { }
-				}
-			}
-			MifareUltralight ul = MifareUltralight.get(tag);
-			if (ul != null) {
-				try {
-					ul.connect();
-					for (int seite = 0; seite < 48; seite += 4) {
-						Log.i(TAG, "Seiten " + seite + "-" + (seite + 3) + ": " + hexOf(ul.readPages(seite)));
-					}
-				} catch (Exception e) {
-					Log.i(TAG, "Seiten lesen beendet: " + e.getClass().getSimpleName());
-				} finally {
-					try { ul.close(); } catch (Exception ignored) { }
-				}
+			try {
+				org.json.JSONObject r = Anlage.karte(c, uid);
+				if (r.optBoolean("angemeldet", false)) ui.post(() -> ergebnis.angemeldet(r));
+				else ui.post(() -> ergebnis.fehler("Anmelden fehlgeschlagen"));
+			} catch (Anlage.AnlageFehler e) {
+				String m = e.status == 401 ? "Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben."
+						: e.status >= 500 ? "Keine Verbindung zur Anlage" : e.getMessage();
+				ui.post(() -> ergebnis.fehler(m));
+			} catch (Exception e) {
+				Log.w(TAG, "Karte: " + e);
+				ui.post(() -> ergebnis.fehler("Keine Verbindung zur Anlage"));
+			} finally {
+				laeuft = false;
 			}
 		}).start();
-	}
-
-	static String hexOf(byte[] b) {
-		if (b == null) return "";
-		StringBuilder sb = new StringBuilder();
-		for (byte x : b) sb.append(String.format("%02X", x));
-		return sb.toString();
 	}
 }

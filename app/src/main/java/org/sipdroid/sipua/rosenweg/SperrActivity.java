@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.Camera;
+import android.nfc.NfcAdapter;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -37,11 +38,15 @@ import org.json.JSONObject;
 import java.util.Collections;
 
 /**
- * Sperrbildschirm des geteilten Telefons: Kamera fuer den Anmelde-QR, Notruf.
+ * Sperrbildschirm des geteilten Telefons: Kamera fuer den Anmelde-QR, NFC-Karte, Notruf.
  *
  * Die Person oeffnet pbx.rosenweg4303.ch/telefon auf dem EIGENEN Handy, meldet
  * sich mit dem Rosenweg-Konto an und haelt den dort angezeigten QR vor die
  * Kamera. Auf diesem Geraet wird nichts eingegeben.
+ *
+ * Oder: die eigene Rosenweg-Karte (UniFi Access, dieselbe wie fuer die Tueren) hinten
+ * ans Telefon halten. Solange der Sperrbildschirm vorne ist, liest er Karten selbst im
+ * Reader-Modus (NfcKarte.anmelden).
  */
 public class SperrActivity extends Activity {
 	private static final String TAG = "RosenwegSperre";
@@ -91,6 +96,7 @@ public class SperrActivity extends Activity {
 		}
 		laeuft = true;
 		kameraStarten();
+		kartenleserEin();
 		handler.post(takt);
 	}
 
@@ -99,7 +105,46 @@ public class SperrActivity extends Activity {
 		laeuft = false;
 		handler.removeCallbacks(takt);
 		kamera.pause();
+		kartenleserAus();
 		super.onPause();
+	}
+
+	// ─── NFC-Karte ──────────────────────────────────────────────────────────
+
+	private void kartenleserEin() {
+		NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
+		if (nfc == null) return;
+		try {
+			nfc.enableReaderMode(this, tag -> {
+				String uid = NfcKarte.uid(tag);
+				if (uid == null || loestEin || !laeuft) return;
+				zeige("Karte erkannt — anmelden …", false);
+				NfcKarte.anmelden(getApplicationContext(), uid, new NfcKarte.Ergebnis() {
+					@Override
+					public void angemeldet(JSONObject r) {
+						// derselbe Weg wie nach dem QR (einloesen)
+						entsperrt(r.optString("name", ""), r.optJSONArray("apps"));
+					}
+
+					@Override
+					public void fehler(String meldung) {
+						zeige(meldung, true);
+					}
+				});
+			}, NfcKarte.LESER_FLAGS, null);
+		} catch (Exception e) {
+			Log.w(TAG, "Kartenleser: " + e);
+		}
+	}
+
+	private void kartenleserAus() {
+		NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
+		if (nfc == null) return;
+		try {
+			nfc.disableReaderMode(this);
+		} catch (Exception e) {
+			Log.w(TAG, "Kartenleser aus: " + e);
+		}
 	}
 
 	@SuppressWarnings("deprecation")
@@ -252,6 +297,7 @@ public class SperrActivity extends Activity {
 		laeuft = false;
 		handler.removeCallbacks(takt);
 		kamera.pause();
+		kartenleserAus();
 		Sperre.freigeben(this, name, apps);
 		if (imLockTask()) {
 			try {
@@ -345,7 +391,7 @@ public class SperrActivity extends Activity {
 		l.addView(rahmen, new LinearLayout.LayoutParams(dp(280), dp(280)));
 
 		TextView hinweis = text(16, hell, false);
-		hinweis.setText("Auf deinem Handy pbx.rosenweg4303.ch/telefon öffnen\nund den Anmelde-QR vor die Kamera halten —\noder unten direkt mit dem Rosenweg-Konto anmelden.");
+		hinweis.setText("Auf deinem Handy pbx.rosenweg4303.ch/telefon öffnen\nund den Anmelde-QR vor die Kamera halten,\ndie Rosenweg-Karte hinten ans Telefon halten —\noder unten direkt mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
 
