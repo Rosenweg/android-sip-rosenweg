@@ -297,9 +297,35 @@ public final class Katalog {
 					d.setApplicationRestrictions(a, paket, bundle(app.optJSONObject("konfig")));
 				}
 				d.setApplicationHidden(a, paket, false);
+				berechtigungenErteilen(c, d, a, paket);
 			} catch (Exception e) {
 				Log.w(TAG, "freigeben " + paket + ": " + e);
 			}
+		}
+	}
+
+	/**
+	 * Laufzeit-Berechtigungen einer Katalog-App erteilen. Beim Abmelden loescht
+	 * clearApplicationUserData sie mit den Daten — ohne das fragte z.B. Rosenweg
+	 * Kamera bei jeder Anmeldung neu. Alle gefaehrlichen inkl. Standort (Entscheid Stefan 24.11.2026).
+	 */
+	static void berechtigungenErteilen(Context c, DevicePolicyManager d, ComponentName a, String paket) {
+		if (Build.VERSION.SDK_INT < 23) return;
+		try {
+			android.content.pm.PackageManager pm = c.getPackageManager();
+			String[] wuensche = pm.getPackageInfo(paket, android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions;
+			if (wuensche == null) return;
+			for (String p : wuensche) {
+				try {
+					android.content.pm.PermissionInfo info = pm.getPermissionInfo(p, 0);
+					int schutz = Build.VERSION.SDK_INT >= 28 ? info.getProtection() : info.protectionLevel & 0xf;
+					if (schutz != android.content.pm.PermissionInfo.PROTECTION_DANGEROUS) continue;
+					boolean ok = d.setPermissionGrantState(a, paket, p, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+					if (!ok) Log.w(TAG, "Berechtigung nicht erteilt: " + paket + " " + p);
+				} catch (Exception ignored) {}
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "berechtigungen " + paket + ": " + e);
 		}
 	}
 

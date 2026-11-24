@@ -233,6 +233,7 @@ public final class Sperre {
 		Anlage.merke(c, false, null);
 		sperrbildschirmText(c);
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
+		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
 		c.stopService(new Intent(c, AnmeldeDienst.class));
@@ -260,6 +261,7 @@ public final class Sperre {
 		Anlage.merke(c, true, name);
 		sperrbildschirmText(c);
 		Katalog.freigeben(c, apps != null ? apps : Katalog.freigegeben(c));
+		startseite(c, "anmelden"); // Rosenweg Launcher: Startseite der Person laden
 		Receiver.updatePhoneAccount(c);
 		if (istDeviceOwner(c)) {
 			DevicePolicyManager d = dpm(c);
@@ -282,6 +284,15 @@ public final class Sperre {
 		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
 		else c.startService(dienst);
 		persoenlichePinSetzen(c.getApplicationContext());
+	}
+
+	/** Rosenweg Launcher Bescheid geben (Startseite pro Person, RosenwegStartseite). */
+	static void startseite(Context c, String was) {
+		try {
+			c.sendBroadcast(new Intent("ch.rosenweg4303.home.STARTSEITE").setPackage(LAUNCHER_PAKET).putExtra("was", was));
+		} catch (Exception e) {
+			Log.w(TAG, "Startseite " + was + ": " + e);
+		}
 	}
 
 	/** Persoenliche PIN der angemeldeten Person von der Anlage holen und als Bildschirmsperre setzen. */
