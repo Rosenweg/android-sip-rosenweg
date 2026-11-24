@@ -129,7 +129,8 @@ public class AnmeldeDienst extends Service {
 				? new Notification.Builder(this, KANAL) : new Notification.Builder(this);
 		b.setSmallIcon(android.R.drawable.stat_sys_phone_call)
 				.setContentTitle("Angemeldet: " + (name.isEmpty() ? "…" : name))
-				.setContentText("Angemeldet · Nebenstelle " + Anlage.nebenstelle(this))
+				.setContentText((Anlage.nummer(this).isEmpty() ? "" : "Tel. " + Anlage.nummer(this) + " · ")
+						+ "Gerät " + Anlage.nebenstelle(this))
 				.setOngoing(true)
 				.setShowWhen(false)
 				.addAction(new Notification.Action.Builder(null, "Abmelden", abPi).build());

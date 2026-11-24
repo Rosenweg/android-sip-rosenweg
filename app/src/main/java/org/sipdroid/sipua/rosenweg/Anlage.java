@@ -63,6 +63,18 @@ public final class Anlage {
 		return prefs(c).getString(PREF_NAME, "");
 	}
 
+	static final String PREF_NUMMER = "rosenweg_nummer";
+
+	/** Persoenliche interne Telefonnummer der angemeldeten Person (leer, wenn unbekannt). */
+	public static String nummer(Context c) {
+		return angemeldet(c) ? prefs(c).getString(PREF_NUMMER, "") : "";
+	}
+
+	static void merkeNummer(Context c, JSONObject r) {
+		prefs(c).edit().putString(PREF_NUMMER,
+				r != null && r.optBoolean("angemeldet", false) ? r.optString("nummer", "") : "").apply();
+	}
+
 	static void merke(Context c, boolean angemeldet, String name) {
 		// Persoenliche Voicemails (AnlageProvider) gehoeren nicht auf ein geteiltes Geraet,
 		// sobald niemand mehr angemeldet ist.
@@ -83,6 +95,7 @@ public final class Anlage {
 		k.put("token", qrInhalt);
 		JSONObject r = anfrage(c, "POST", "/api/telefon/einloesen", k.toString());
 		merke(c, r.optBoolean("angemeldet", false), r.optString("name", ""));
+		merkeNummer(c, r);
 		return r;
 	}
 
@@ -93,6 +106,7 @@ public final class Anlage {
 	public static JSONObject karte(Context c, String uid) throws Exception {
 		JSONObject r = anfrage(c, "POST", "/api/telefon/karte", new JSONObject().put("uid", uid).toString(), 20000);
 		merke(c, r.optBoolean("angemeldet", false), r.optString("name", ""));
+		merkeNummer(c, r);
 		return r;
 	}
 
@@ -124,6 +138,7 @@ public final class Anlage {
 			prefs(c).edit().putString(PREF_GERAET, s.optString("geraet")).apply();
 		}
 		merke(c, s.optBoolean("angemeldet", false), s.optString("name", ""));
+		merkeNummer(c, s);
 		Sperre.sperrbildschirmText(c);
 		return s;
 	}

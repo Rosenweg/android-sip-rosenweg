@@ -77,8 +77,14 @@ public class RosenwegActivity extends Activity {
 		wer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
 		wer.setTextColor(Color.parseColor("#94A3B8"));
 		wer.setPadding(0, dp(4), 0, dp(20));
-		wer.setText(Anlage.angemeldet(this) ? "Angemeldet: " + Anlage.name(this)
-				+ " · Nebenstelle " + Anlage.nebenstelle(this) : "Niemand angemeldet");
+		if (Anlage.angemeldet(this)) {
+			String nr = Anlage.nummer(this);
+			wer.setText("Angemeldet: " + Anlage.name(this)
+					+ (nr.isEmpty() ? "" : "\nInterne Telefonnummer: " + nr)
+					+ "\nGerät: Nebenstelle " + Anlage.nebenstelle(this));
+		} else {
+			wer.setText("Niemand angemeldet · Gerät: Nebenstelle " + Anlage.nebenstelle(this));
+		}
 		l.addView(wer);
 
 		ScrollView sv = new ScrollView(this);
