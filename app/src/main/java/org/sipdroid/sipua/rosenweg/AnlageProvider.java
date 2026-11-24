@@ -115,7 +115,9 @@ public class AnlageProvider extends ContentProvider {
 		// Eigener Thread: ruft eine App vom Haupt-Thread, gaebe Android dessen StrictMode
 		// ueber Binder mit (NetworkOnMainThreadException hier im Provider).
 		try {
-			return NETZ.submit(() -> ausfuehren(method, arg, extras)).get(25, java.util.concurrent.TimeUnit.SECONDS);
+			// Aufrufer jetzt merken: im eigenen Thread kennt Android ihn nicht mehr
+			final String aufrufer = getCallingPackage();
+			return NETZ.submit(() -> ausfuehren(method, arg, extras, aufrufer)).get(25, java.util.concurrent.TimeUnit.SECONDS);
 		} catch (Exception e) {
 			Bundle b = new Bundle();
 			b.putString("fehler", "Zeitueberschreitung");
@@ -125,7 +127,7 @@ public class AnlageProvider extends ContentProvider {
 
 	private static final java.util.concurrent.ExecutorService NETZ = java.util.concurrent.Executors.newCachedThreadPool();
 
-	private Bundle ausfuehren(String method, String arg, Bundle extras) {
+	private Bundle ausfuehren(String method, String arg, Bundle extras, String aufrufer) {
 		Bundle b = new Bundle();
 		try {
 			if ("angemeldet".equals(method)) {
@@ -133,7 +135,7 @@ public class AnlageProvider extends ContentProvider {
 				b.putBoolean("angemeldet", Anlage.angemeldet(getContext()));
 			} else if ("nextcloud_konto".equals(method)) {
 				// Abgemeldet: nur Apps im Nachlauf (offene Dateien) bekommen den Zugang noch
-				if (!Anlage.angemeldet(getContext()) && !Nachlauf.enthaelt(getContext(), getCallingPackage())) return b;
+				if (!Anlage.angemeldet(getContext()) && !Nachlauf.enthaelt(getContext(), aufrufer)) return b;
 				// Nextcloud-Zugang der angemeldeten Person fuer die Rosenweg-Apps (cloud-Bibliothek)
 				JSONObject k = Anlage.nextcloudKonto(getContext());
 				if (k != null) {
