@@ -37,6 +37,8 @@
 	<uses-feature android:name="android.hardware.telephony" android:required="false"/>
 	<uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
 	<uses-feature android:name="android.hardware.wifi" android:required="false"/>
+	<!-- Rosenweg: Daten der Anlage nur fuer Apps mit derselben Signatur (Rosenweg Telefon) -->
+	<permission android:name="ch.rosenweg4303.permission.ANLAGE" android:protectionLevel="signature" />
 	<application android:name="org.sipdroid.sipua.SipdroidApp" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:label="@string/app_name" android:theme="@style/MyHoloTheme">
 
 
@@ -160,6 +162,10 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Zeigt die Anmeldung am geteilten Telefon und bietet Abmelden an" />
         </service>
+		<provider android:name="org.sipdroid.sipua.rosenweg.AnlageProvider"
+			android:authorities="ch.rosenweg4303.telefon.anlage"
+			android:exported="true"
+			android:readPermission="ch.rosenweg4303.permission.ANLAGE" />
     </application>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 	<uses-permission android:name="android.permission.CAMERA"/>

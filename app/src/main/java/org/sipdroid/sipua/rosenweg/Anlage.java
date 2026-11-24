@@ -64,6 +64,9 @@ public final class Anlage {
 	}
 
 	static void merke(Context c, boolean angemeldet, String name) {
+		// Persoenliche Voicemails (AnlageProvider) gehoeren nicht auf ein geteiltes Geraet,
+		// sobald niemand mehr angemeldet ist.
+		if (!angemeldet) loescheVoicemails(c);
 		prefs(c).edit()
 				.putBoolean(PREF_ANGEMELDET, angemeldet)
 				.putString(PREF_NAME, angemeldet && name != null ? name : "")
@@ -99,6 +102,16 @@ public final class Anlage {
 	public static JSONObject kontakte(Context c, String version) throws Exception {
 		return anfrage(c, "GET", "/api/telefon/kontakte"
 				+ (version == null || version.isEmpty() ? "" : "?version=" + java.net.URLEncoder.encode(version, "UTF-8")));
+	}
+
+	static void loescheVoicemails(Context c) {
+		java.io.File[] fs = new java.io.File(c.getCacheDir(), "voicemail").listFiles();
+		if (fs != null) for (java.io.File f : fs) f.delete();
+	}
+
+	/** GET /api/telefon/anrufliste -> {angemeldet, name, anrufe:[...]}: Anrufe der angemeldeten Person. */
+	public static JSONObject anrufliste(Context c) throws Exception {
+		return anfrage(c, "GET", "/api/telefon/anrufliste?limit=200");
 	}
 
 	/** Datei (APK) mit den Geraete-Zugangsdaten herunterladen. */
