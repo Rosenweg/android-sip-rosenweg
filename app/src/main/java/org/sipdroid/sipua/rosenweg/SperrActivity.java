@@ -67,7 +67,7 @@ public class SperrActivity extends Activity {
 			setShowWhenLocked(true);
 			setTurnScreenOn(true);
 		}
-		setContentView(baueOberflaeche());
+		setContentView(Raender.freihalten(baueOberflaeche()));
 		// Sicherstellen, dass die SIP-Engine laeuft (startet sie, falls noch nicht).
 		org.sipdroid.sipua.ui.Receiver.engine(this);
 		Katalog.vielleichtAbgleichen(this, false);

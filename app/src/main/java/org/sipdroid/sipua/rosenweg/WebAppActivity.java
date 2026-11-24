@@ -74,7 +74,10 @@ public class WebAppActivity extends Activity {
 			}
 		});
 		if (anmelden) web.addJavascriptInterface(new Bruecke(), "RosenwegTelefon");
-		setContentView(web);
+		android.widget.FrameLayout rahmen = new android.widget.FrameLayout(this);
+		rahmen.setBackgroundColor(android.graphics.Color.parseColor("#0F172A"));
+		rahmen.addView(web);
+		setContentView(Raender.freihalten(rahmen));
 		web.loadUrl(url);
 	}
 

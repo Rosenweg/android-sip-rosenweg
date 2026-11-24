@@ -37,7 +37,7 @@ public class RosenwegActivity extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		setContentView(baue());
+		setContentView(Raender.freihalten(baue()));
 	}
 
 	private int dp(float v) {
