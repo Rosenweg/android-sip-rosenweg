@@ -62,7 +62,15 @@ public class SperrActivity extends Activity {
 	private volatile boolean loestEin;   // gescannter QR wird eingeloest
 	private String zuletztGescannt;
 	private long zuletztGescanntUm;
-	private boolean frontkamera = true;
+	private boolean frontkamera = false;   // hintere Kamera; die vordere war nur fuer den Emulator
+	// Kamera nur auf Wunsch: laeuft die hintere Kamera, liest das A15 keine NFC-Karten
+	// (Antenne neben der Kamera). Standard ist darum der Kartenleser.
+	private boolean kameraAn;
+	private View kameraRahmen;
+	private TextView kartenHinweis;
+	private Button qrKnopf, wechselKnopf;
+	private final Runnable kameraZeitAus = this::kameraStoppen;
+	private static final long KAMERA_MS = 60_000;
 
 	@Override
 	protected void onCreate(Bundle b) {
@@ -95,7 +103,7 @@ public class SperrActivity extends Activity {
 			}
 		}
 		laeuft = true;
-		kameraStarten();
+		kameraAnzeigen(false);
 		kartenleserEin();
 		handler.post(takt);
 	}
@@ -104,7 +112,9 @@ public class SperrActivity extends Activity {
 	protected void onPause() {
 		laeuft = false;
 		handler.removeCallbacks(takt);
+		handler.removeCallbacks(kameraZeitAus);
 		kamera.pause();
+		kameraAnzeigen(false);
 		kartenleserAus();
 		super.onPause();
 	}
@@ -117,6 +127,8 @@ public class SperrActivity extends Activity {
 		try {
 			nfc.enableReaderMode(this, tag -> {
 				String uid = NfcKarte.uid(tag);
+				Log.i(TAG, "Kartenleser: Karte da, uid=" + (uid == null ? "keine" : uid.length() / 2 + " Byte")
+						+ " loestEin=" + loestEin + " laeuft=" + laeuft);
 				if (uid == null || loestEin || !laeuft) return;
 				zeige("Karte erkannt — anmelden …", false);
 				NfcKarte.anmelden(getApplicationContext(), uid, new NfcKarte.Ergebnis() {
@@ -132,6 +144,7 @@ public class SperrActivity extends Activity {
 					}
 				});
 			}, NfcKarte.LESER_FLAGS, null);
+			Log.i(TAG, "Kartenleser ein");
 		} catch (Exception e) {
 			Log.w(TAG, "Kartenleser: " + e);
 		}
@@ -160,6 +173,30 @@ public class SperrActivity extends Activity {
 	}
 
 	// ─── Kamera ─────────────────────────────────────────────────────────────
+
+	/** QR-Scan auf Wunsch: Kamera an, Kartenleser aus; nach 60 s wieder zurueck. */
+	private void kameraOeffnen() {
+		kartenleserAus();
+		kameraAnzeigen(true);
+		kameraStarten();
+		handler.removeCallbacks(kameraZeitAus);
+		handler.postDelayed(kameraZeitAus, KAMERA_MS);
+	}
+
+	private void kameraStoppen() {
+		handler.removeCallbacks(kameraZeitAus);
+		if (kamera != null) kamera.pause();
+		kameraAnzeigen(false);
+		if (laeuft) kartenleserEin();
+	}
+
+	private void kameraAnzeigen(boolean an) {
+		kameraAn = an;
+		if (kameraRahmen != null) kameraRahmen.setVisibility(an ? View.VISIBLE : View.GONE);
+		if (kartenHinweis != null) kartenHinweis.setVisibility(an ? View.GONE : View.VISIBLE);
+		if (wechselKnopf != null) wechselKnopf.setVisibility(an ? View.VISIBLE : View.GONE);
+		if (qrKnopf != null) qrKnopf.setText(an ? "Kamera aus" : "QR-Code scannen");
+	}
 
 	private void kameraStarten() {
 		if (Build.VERSION.SDK_INT >= 23
@@ -389,9 +426,15 @@ public class SperrActivity extends Activity {
 		rahmen.addView(kamera, new FrameLayout.LayoutParams(
 				FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 		l.addView(rahmen, new LinearLayout.LayoutParams(dp(280), dp(280)));
+		kameraRahmen = rahmen;
+
+		kartenHinweis = text(24, hell, true);
+		kartenHinweis.setText("Rosenweg-Karte\nhinten ans Telefon halten");
+		kartenHinweis.setPadding(0, dp(60), 0, dp(60));
+		l.addView(kartenHinweis);
 
 		TextView hinweis = text(16, hell, false);
-		hinweis.setText("Auf deinem Handy pbx.rosenweg4303.ch/telefon öffnen\nund den Anmelde-QR vor die Kamera halten,\ndie Rosenweg-Karte hinten ans Telefon halten —\noder unten direkt mit dem Rosenweg-Konto anmelden.");
+		hinweis.setText("Oder: „QR-Code scannen“ und den Anmelde-QR von\npbx.rosenweg4303.ch/telefon auf deinem Handy zeigen,\noder unten mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
 
@@ -410,14 +453,20 @@ public class SperrActivity extends Activity {
 		kp.bottomMargin = dp(10);
 		l.addView(konto, kp);
 
-		Button wechseln = knopf("Kamera wechseln", "#334155");
-		wechseln.setOnClickListener(v -> {
+		qrKnopf = knopf("QR-Code scannen", "#334155");
+		qrKnopf.setOnClickListener(v -> { if (kameraAn) kameraStoppen(); else kameraOeffnen(); });
+		LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+		qp.bottomMargin = dp(10);
+		l.addView(qrKnopf, qp);
+
+		wechselKnopf = knopf("Kamera wechseln", "#334155");
+		wechselKnopf.setOnClickListener(v -> {
 			frontkamera = !frontkamera;
 			kameraStarten();
 		});
 		LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
 		wp.bottomMargin = dp(10);
-		l.addView(wechseln, wp);
+		l.addView(wechselKnopf, wp);
 
 		Button notruf = knopf("Notruf", "#DC2626");
 		notruf.setOnClickListener(v -> notruf());

@@ -100,7 +100,10 @@ public class NfcKarte extends Activity {
 	public static void anmelden(Context c, String uid, Ergebnis ergebnis) {
 		synchronized (NfcKarte.class) {
 			long jetzt = SystemClock.elapsedRealtime();
-			if (laeuft || (uid.equals(zuletzt) && jetzt - zuletztUm < 4000)) return;
+			if (laeuft || (uid.equals(zuletzt) && jetzt - zuletztUm < 4000)) {
+				Log.i(TAG, "Karte verworfen: " + (laeuft ? "Anmeldung laeuft schon" : "gleiche Karte innert 4 s"));
+				return;
+			}
 			laeuft = true;
 			zuletzt = uid;
 			zuletztUm = jetzt;
