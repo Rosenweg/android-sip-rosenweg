@@ -150,7 +150,10 @@ public final class Katalog {
 	/** SHA-256 der installierten base.apk, zwischengespeichert nach Pfad, Groesse und Zeit. */
 	static String installierteSha(Context c, String paket) {
 		try {
-			File f = new File(c.getPackageManager().getApplicationInfo(paket, 0).sourceDir);
+			// MATCH_UNINSTALLED_PACKAGES: auch ausgeblendete Apps (nach dem Abmelden) finden,
+			// sonst gelten sie als "anders" und werden bei jedem Abgleich neu installiert.
+			int flags = Build.VERSION.SDK_INT >= 24 ? PackageManager.MATCH_UNINSTALLED_PACKAGES : 0;
+			File f = new File(c.getPackageManager().getApplicationInfo(paket, flags).sourceDir);
 			String stand = f.getPath() + "|" + f.length() + "|" + f.lastModified();
 			String gemerkt = Anlage.prefs(c).getString(PREF_IST + paket, "");
 			int k = gemerkt.lastIndexOf(':');
