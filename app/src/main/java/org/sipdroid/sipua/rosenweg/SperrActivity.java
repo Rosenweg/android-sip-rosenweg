@@ -308,7 +308,7 @@ public class SperrActivity extends Activity {
 		l.setPadding(dp(24), dp(40), dp(24), dp(24));
 
 		TextView titel = text(26, hell, true);
-		titel.setText("Rosenweg Telefon");
+		titel.setText("Rosenweg");
 		l.addView(titel);
 
 		TextView unter = text(15, grau, false);
