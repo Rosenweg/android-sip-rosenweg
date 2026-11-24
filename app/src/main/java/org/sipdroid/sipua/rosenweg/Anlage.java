@@ -69,6 +69,7 @@ public final class Anlage {
 		if (!angemeldet) {
 			loescheVoicemails(c);
 			nextcloud = null;
+			messenger = null;
 		}
 		prefs(c).edit()
 				.putBoolean(PREF_ANGEMELDET, angemeldet)
@@ -134,6 +135,20 @@ public final class Anlage {
 	}
 
 	private static volatile JSONObject nextcloud;   // nur im Speicher, nie auf die Platte
+	private static volatile JSONObject messenger;   // dito
+
+	/**
+	 * Rosenweg-Messenger-Zugang der angemeldeten Person (Anlage-Token, 12 h, vom message-store
+	 * angenommen). Wird kurz vor Ablauf neu geholt. Null, wenn niemand angemeldet ist.
+	 */
+	public static JSONObject messengerKonto(Context c) throws Exception {
+		if (!angemeldet(c)) return null;
+		JSONObject k = messenger;
+		if (k != null && k.optLong("gueltig_bis") * 1000 - System.currentTimeMillis() > 3600_000) return k;
+		k = anfrage(c, "GET", "/api/telefon/messenger");
+		messenger = k;
+		return k;
+	}
 
 	/**
 	 * Nextcloud-Zugang der angemeldeten Person (App-Passwort, ausgestellt von der Anlage,

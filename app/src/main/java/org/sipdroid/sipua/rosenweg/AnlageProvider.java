@@ -133,6 +133,14 @@ public class AnlageProvider extends ContentProvider {
 			if ("angemeldet".equals(method)) {
 				// ohne Netz: zuletzt bekannter Stand (Launcher prueft das bei jedem Anzeigen)
 				b.putBoolean("angemeldet", Anlage.angemeldet(getContext()));
+			} else if ("messenger_konto".equals(method)) {
+				// Rosenweg Messenger: Anlage-Token der angemeldeten Person
+				JSONObject k = Anlage.messengerKonto(getContext());
+				if (k != null) {
+					b.putString("server", k.optString("server"));
+					b.putString("token", k.optString("token"));
+					b.putLong("gueltig_bis", k.optLong("gueltig_bis"));
+				}
 			} else if ("nextcloud_konto".equals(method)) {
 				// Abgemeldet: nur Apps im Nachlauf (offene Dateien) bekommen den Zugang noch
 				if (!Anlage.angemeldet(getContext()) && !Nachlauf.enthaelt(getContext(), aufrufer)) return b;
