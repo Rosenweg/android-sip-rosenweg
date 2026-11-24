@@ -156,6 +156,7 @@
             <intent-filter>
                 <action android:name="ch.rosenweg4303.telefon.ADB_INSTALLATION" />
                 <action android:name="ch.rosenweg4303.telefon.ADB_ABGLEICH" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_NEBENSTELLE" />
             </intent-filter>
         </receiver>
         <service android:name=".rosenweg.KontoDienst" android:exported="false">

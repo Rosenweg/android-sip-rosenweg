@@ -16,15 +16,33 @@ import android.util.Log;
  *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_ABGLEICH \\
  *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
  *
+ * Nebenstelle umstellen (Nummernplan, 24.11.2026: Geraete 2100-2199), Passwort bleibt:
+ *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_NEBENSTELLE --es ext 2102 \
+ *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
+ *
  * Geschuetzt durch android.permission.DUMP: die hat die adb-Shell, normale
  * Apps bekommen sie nicht. Wer das senden kann, hat ohnehin USB-Debugging
  * und das Geraet in der Hand.
  */
 public class AdbFreigabe extends BroadcastReceiver {
 	static final String ABGLEICH = "ch.rosenweg4303.telefon.ADB_ABGLEICH";
+	static final String NEBENSTELLE = "ch.rosenweg4303.telefon.ADB_NEBENSTELLE";
 
 	@Override
 	public void onReceive(Context c, Intent i) {
+		if (NEBENSTELLE.equals(i.getAction())) {
+			String ext = i.getStringExtra("ext");
+			if (ext == null || !ext.matches("[0-9]{2,8}")) {
+				Log.w("RosenwegKatalog", "ADB_NEBENSTELLE: ungueltige Nummer");
+				return;
+			}
+			Anlage.prefs(c).edit().putString(org.sipdroid.sipua.ui.Settings.PREF_USERNAME, ext).commit();
+			// mit der neuen Nummer neu am SIP-Server anmelden (wie nach einer Aenderung in den Einstellungen)
+			org.sipdroid.sipua.ui.Receiver.engine(c).halt();
+			org.sipdroid.sipua.ui.Receiver.engine(c).StartEngine();
+			Log.i("RosenwegKatalog", "Nebenstelle per adb umgestellt auf " + ext);
+			return;
+		}
 		if (ABGLEICH.equals(i.getAction())) {
 			// Katalog, Ausblendliste, Telefonbuch sofort holen — statt Neustart.
 			Log.i("RosenwegKatalog", "Abgleich per adb angestossen");
