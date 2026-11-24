@@ -92,9 +92,13 @@ public final class Kontakte {
 				JSONArray nummern = k.optJSONArray("nummern");
 				for (int j = 0; nummern != null && j < nummern.length(); j++) {
 					JSONObject nr = nummern.getJSONObject(j);
-					ops.add(daten(basis, Phone.CONTENT_ITEM_TYPE)
+					ContentProviderOperation.Builder tel = daten(basis, Phone.CONTENT_ITEM_TYPE)
 							.withValue(Phone.NUMBER, nr.optString("nummer"))
-							.withValue(Phone.TYPE, telefonTyp(nr.optString("typ"))).build());
+							.withValue(Phone.TYPE, telefonTyp(nr.optString("typ")));
+					// Interne Nummer der Anlage (persoenlich 3HHWWP, Verwaltung 4XXX):
+					// eigene Beschriftung "Rosenweg" statt "Andere"
+					if ("rosenweg".equals(nr.optString("typ"))) tel.withValue(Phone.LABEL, "Rosenweg");
+					ops.add(tel.build());
 				}
 				JSONArray mails = k.optJSONArray("emails");
 				for (int j = 0; mails != null && j < mails.length(); j++) {
@@ -129,6 +133,7 @@ public final class Kontakte {
 			case "mobil": return Phone.TYPE_MOBILE;
 			case "arbeit": return Phone.TYPE_WORK;
 			case "privat": return Phone.TYPE_HOME;
+			case "rosenweg": return Phone.TYPE_CUSTOM;
 			default: return Phone.TYPE_OTHER;
 		}
 	}
