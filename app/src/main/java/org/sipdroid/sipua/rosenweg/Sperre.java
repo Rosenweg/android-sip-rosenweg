@@ -240,6 +240,7 @@ public final class Sperre {
 		Bildschirmsperre.entfernen(c);   // persoenliche PIN weg, bevor jemand anderes kommt
 		Bildschirmsperre.vorbereiten(c); // ohne Sperre ist ein neuer Schluessel sofort aktiv
 		Anlage.merke(c, false, null);
+		Anlage.prefs(c).edit().remove(PREF_TECHNIK).apply();
 		sperrbildschirmText(c);
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
@@ -302,9 +303,17 @@ public final class Sperre {
 			try { Anlage.nextcloudKonto(app); } catch (Exception e) { Log.w(TAG, "Nextcloud-Zugang: " + e); }
 			try {
 				org.json.JSONObject s = Anlage.status(app);
-				if (s.optBoolean("angemeldet")) einstellungenSperren(app, !s.optBoolean("technik"));
+				if (s.optBoolean("angemeldet")) {
+					boolean technik = s.optBoolean("technik");
+					Anlage.prefs(app).edit().putBoolean(PREF_TECHNIK, technik).apply();
+					einstellungenSperren(app, !technik);
+				}
 			} catch (Exception e) {
-				einstellungenSperren(app, true);   // im Zweifel sperren
+				// Anlage nicht erreichbar (z.B. Nebenstelle umgestellt): den letzten bekannten Stand
+				// behalten statt sperren — sonst ist auch adb weg und das Telefon nur noch von Hand
+				// wieder erreichbar (24.11.2026).
+				Log.w(TAG, "Status fuer Einstellungen: " + e);
+				einstellungenSperren(app, !Anlage.prefs(app).getBoolean(PREF_TECHNIK, false));
 			}
 		}).start();
 	}
@@ -325,6 +334,8 @@ public final class Sperre {
 			android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
 	};
 
+	static final String PREF_TECHNIK = "rosenweg_technik";
+
 	static void einstellungenSperren(Context c, boolean sperren) {
 		if (!istDeviceOwner(c)) return;
 		DevicePolicyManager d = dpm(c);
@@ -336,6 +347,12 @@ public final class Sperre {
 			} catch (Exception e) {
 				Log.w(TAG, "Einschraenkung " + r + ": " + e);
 			}
+		}
+		// DISALLOW_DEBUGGING_FEATURES schaltet USB-Debugging aus, das Aufheben aber nicht wieder
+		// ein: adb nach dem Entsperren selbst wieder einschalten (Einrichtung, Wartung).
+		if (!sperren) {
+			try { d.setGlobalSetting(a, android.provider.Settings.Global.ADB_ENABLED, "1"); }
+			catch (Exception e) { Log.w(TAG, "adb einschalten: " + e); }
 		}
 		Log.i(TAG, "Gefaehrliche Einstellungen " + (sperren ? "gesperrt" : "offen"));
 	}
