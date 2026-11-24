@@ -284,6 +284,11 @@ public final class Sperre {
 		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
 		else c.startService(dienst);
 		persoenlichePinSetzen(c.getApplicationContext());
+		// Nextcloud-Zugang schon holen, damit die Apps ihn sofort haben
+		Context app = c.getApplicationContext();
+		new Thread(() -> {
+			try { Anlage.nextcloudKonto(app); } catch (Exception e) { Log.w(TAG, "Nextcloud-Zugang: " + e); }
+		}).start();
 	}
 
 	/** Rosenweg Launcher Bescheid geben (Startseite pro Person, RosenwegStartseite). */

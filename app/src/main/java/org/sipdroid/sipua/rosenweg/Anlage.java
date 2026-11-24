@@ -66,7 +66,10 @@ public final class Anlage {
 	static void merke(Context c, boolean angemeldet, String name) {
 		// Persoenliche Voicemails (AnlageProvider) gehoeren nicht auf ein geteiltes Geraet,
 		// sobald niemand mehr angemeldet ist.
-		if (!angemeldet) loescheVoicemails(c);
+		if (!angemeldet) {
+			loescheVoicemails(c);
+			nextcloud = null;
+		}
 		prefs(c).edit()
 				.putBoolean(PREF_ANGEMELDET, angemeldet)
 				.putString(PREF_NAME, angemeldet && name != null ? name : "")
@@ -128,6 +131,21 @@ public final class Anlage {
 	/** DELETE /api/telefon/pin */
 	public static void pinEntfernen(Context c) throws Exception {
 		anfrage(c, "DELETE", "/api/telefon/pin");
+	}
+
+	private static volatile JSONObject nextcloud;   // nur im Speicher, nie auf die Platte
+
+	/**
+	 * Nextcloud-Zugang der angemeldeten Person (App-Passwort, ausgestellt von der Anlage,
+	 * beim Abmelden dort widerrufen). Null, wenn niemand angemeldet ist.
+	 */
+	public static JSONObject nextcloudKonto(Context c) throws Exception {
+		if (!angemeldet(c)) return null;
+		JSONObject k = nextcloud;
+		if (k != null) return k;
+		k = anfrage(c, "GET", "/api/telefon/nextcloud");
+		nextcloud = k;
+		return k;
 	}
 
 	static void loescheVoicemails(Context c) {

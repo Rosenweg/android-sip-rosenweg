@@ -111,10 +111,32 @@ public class AnlageProvider extends ContentProvider {
 		if (getContext().checkCallingPermission("ch.rosenweg4303.permission.ANLAGE") != PackageManager.PERMISSION_GRANTED) {
 			throw new SecurityException("Nur Rosenweg-Apps");
 		}
-		Bundle b = new Bundle();
-		if (arg == null || arg.isEmpty() || !Anlage.eingerichtet(getContext())) return b;
+		if (arg == null || arg.isEmpty() || !Anlage.eingerichtet(getContext())) return new Bundle();
+		// Eigener Thread: ruft eine App vom Haupt-Thread, gaebe Android dessen StrictMode
+		// ueber Binder mit (NetworkOnMainThreadException hier im Provider).
 		try {
-			if ("einstellungen_holen".equals(method)) {
+			return NETZ.submit(() -> ausfuehren(method, arg, extras)).get(25, java.util.concurrent.TimeUnit.SECONDS);
+		} catch (Exception e) {
+			Bundle b = new Bundle();
+			b.putString("fehler", "Zeitueberschreitung");
+			return b;
+		}
+	}
+
+	private static final java.util.concurrent.ExecutorService NETZ = java.util.concurrent.Executors.newCachedThreadPool();
+
+	private Bundle ausfuehren(String method, String arg, Bundle extras) {
+		Bundle b = new Bundle();
+		try {
+			if ("nextcloud_konto".equals(method)) {
+				// Nextcloud-Zugang der angemeldeten Person fuer die Rosenweg-Apps (cloud-Bibliothek)
+				JSONObject k = Anlage.nextcloudKonto(getContext());
+				if (k != null) {
+					b.putString("server", k.optString("server"));
+					b.putString("benutzer", k.optString("benutzer"));
+					b.putString("app_passwort", k.optString("app_passwort"));
+				}
+			} else if ("einstellungen_holen".equals(method)) {
 				JSONObject d = Anlage.einstellungen(getContext(), arg);
 				b.putLong("geaendert", d.optLong("geaendert"));
 				JSONObject w = d.optJSONObject("werte");
