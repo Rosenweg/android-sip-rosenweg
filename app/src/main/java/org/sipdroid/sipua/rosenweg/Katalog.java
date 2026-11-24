@@ -95,6 +95,14 @@ public final class Katalog {
 	/** Katalog holen und fehlende/geaenderte APKs installieren. Blockiert. */
 	public static void synchronisieren(Context c) {
 		if (!Sperre.istDeviceOwner(c)) return;
+		// Nur ein Abgleich gleichzeitig (Anmeldung, AnmeldeDienst und adb kamen sich in die
+		// Quere und stiessen dieselbe Installation mehrfach an).
+		synchronized (ABGLEICH) { abgleichen(c); }
+	}
+
+	private static final Object ABGLEICH = new Object();
+
+	private static void abgleichen(Context c) {
 		try {
 			JSONObject k = Anlage.katalog(c);
 			JSONArray apps = k.getJSONArray("apps");
@@ -108,7 +116,18 @@ public final class Katalog {
 				if (!"apk".equals(a.optString("art")) || a.isNull("download")) continue;
 				String paket = a.getString("paket");
 				String sha = a.optString("sha256", "");
-				if (installiert(c, paket) && sha.equals(Anlage.prefs(c).getString(PREF_SHA + paket, ""))) continue;
+				// Massgebend ist die tatsaechlich installierte APK, nicht nur die gemerkte
+				// Pruefsumme: beim Selbst-Update beendet Android die App vor der
+				// Erfolgsmeldung, die Pruefsumme wurde nie gemerkt und die App installierte
+				// sich bei jedem Abgleich erneut.
+				if (installiert(c, paket)) {
+					if (sha.equals(Anlage.prefs(c).getString(PREF_SHA + paket, ""))
+							&& sha.equalsIgnoreCase(installierteSha(c, paket))) continue;
+					if (sha.equalsIgnoreCase(installierteSha(c, paket))) {
+						installiertGemerkt(c, paket, sha);
+						continue;
+					}
+				}
 				installieren(c, paket, a.getString("download"), sha);
 			}
 		} catch (Exception e) {
@@ -123,6 +142,25 @@ public final class Katalog {
 			return true;
 		} catch (PackageManager.NameNotFoundException e) {
 			return false;
+		}
+	}
+
+	private static final String PREF_IST = "rosenweg_apk_ist_";  // + Paket: Datei-Stand:Pruefsumme
+
+	/** SHA-256 der installierten base.apk, zwischengespeichert nach Pfad, Groesse und Zeit. */
+	static String installierteSha(Context c, String paket) {
+		try {
+			File f = new File(c.getPackageManager().getApplicationInfo(paket, 0).sourceDir);
+			String stand = f.getPath() + "|" + f.length() + "|" + f.lastModified();
+			String gemerkt = Anlage.prefs(c).getString(PREF_IST + paket, "");
+			int k = gemerkt.lastIndexOf(':');
+			if (k > 0 && gemerkt.substring(0, k).equals(stand)) return gemerkt.substring(k + 1);
+			String sha = sha256(f);
+			Anlage.prefs(c).edit().putString(PREF_IST + paket, stand + ":" + sha).apply();
+			return sha;
+		} catch (Exception e) {
+			Log.w(TAG, "installierteSha " + paket + ": " + e);
+			return "";
 		}
 	}
 
