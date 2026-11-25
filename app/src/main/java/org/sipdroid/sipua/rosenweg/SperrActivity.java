@@ -104,6 +104,7 @@ public class SperrActivity extends Activity {
 	private Button nochmalsKnopf, abbrechenKnopf;
 	private View obenPlatz, untenPlatz;
 	private LinearLayout pinSeite;
+	private android.widget.ScrollView pinRollen;
 	private final java.util.List<TextView> schrittZeilen = new java.util.ArrayList<>();
 	private volatile boolean ablaufAktiv;
 	/** Anlage erreichbar? Nur dann Anmelde-Moeglichkeiten zeigen (Stefan 25.11.2026). */
@@ -630,12 +631,17 @@ public class SperrActivity extends Activity {
 				if (imm != null) imm.hideSoftInputFromWindow(pinSeite.getWindowToken(), 0);
 				pinFertig = null;
 				pinSeite.setVisibility(View.GONE);
+				if (logo != null) logo.setVisibility(View.VISIBLE);
 				kopfText.setText("Anmelden");
 				kopfText.setTextSize(26);
 				schrittRahmen.setVisibility(View.VISIBLE);
 				antwort.offer(pin);
 			};
+			// Logo weg, solange die PIN-Seite offen ist: sonst bleibt neben Tastatur und Notruf
+			// kein Platz fuer die beiden Felder
+			if (logo != null) logo.setVisibility(View.GONE);
 			pinSeite.setVisibility(View.VISIBLE);
+			pinRollen.scrollTo(0, 0);
 			pinEins.requestFocus();
 		});
 		String r = antwort.take();
@@ -1158,7 +1164,21 @@ public class SperrActivity extends Activity {
 		spaeter.setBackgroundColor(Color.TRANSPARENT);
 		spaeter.setOnClickListener(v -> { if (pinFertig != null) pinFertig.accept(""); });
 		p.addView(spaeter, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48)));
-		return p;
+		// Rollbar und oben ausgerichtet: mit offener Tastatur bleibt auf dem A15 nur wenig Hoehe
+		// uebrig, und die Felder lagen darunter (Stefan 25.11.2026)
+		pinRollen = new android.widget.ScrollView(this);
+		pinRollen.setFillViewport(true);
+		pinRollen.addView(p, new android.widget.FrameLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+		LinearLayout aussen = new LinearLayout(this);
+		aussen.setOrientation(LinearLayout.VERTICAL);
+		aussen.addView(pinRollen, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+		View.OnFocusChangeListener sichtbar = (v, fokus) -> {
+			if (fokus) pinRollen.postDelayed(() -> pinRollen.smoothScrollTo(0, Math.max(0, v.getTop() - dp(8))), 300);
+		};
+		pinEins.setOnFocusChangeListener(sichtbar);
+		pinZwei.setOnFocusChangeListener(sichtbar);
+		return aussen;
 	}
 
 	private android.widget.EditText pinFeld(String hinweis) {
