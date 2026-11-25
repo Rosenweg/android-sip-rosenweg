@@ -147,6 +147,7 @@ public final class Anlage {
 		merke(c, s.optBoolean("angemeldet", false), s.optString("name", ""));
 		merkeNummer(c, s);
 		Sperre.sperrbildschirmText(c);
+		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
 		return s;
 	}
 

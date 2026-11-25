@@ -258,6 +258,7 @@ public final class Sperre {
 		Anlage.merke(c, false, null);
 		Anlage.prefs(c).edit().remove(PREF_TECHNIK).apply();
 		sperrbildschirmText(c);
+		Sperrbild.fuer(c, "");    // zurueck auf das Rosenweg-Logo
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
 		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen
@@ -290,6 +291,8 @@ public final class Sperre {
 	public static void freigeben(Context c, String name, org.json.JSONArray apps) {
 		Anlage.merke(c, true, name);
 		sperrbildschirmText(c);
+		// Sperrbild der Person (Gruppe vor Haus) kommt mit dem Status der Anlage
+		new Thread(() -> { try { Anlage.status(c.getApplicationContext()); } catch (Exception ignored) { } }, "Status").start();
 		Katalog.freigeben(c, apps != null ? apps : Katalog.freigegeben(c));
 		startseite(c, "anmelden"); // Rosenweg Launcher: Startseite der Person laden
 		Receiver.updatePhoneAccount(c);
