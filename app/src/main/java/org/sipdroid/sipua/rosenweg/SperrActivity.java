@@ -140,9 +140,37 @@ public class SperrActivity extends Activity {
 		}
 		laeuft = true;
 		kameraAnzeigen(false);
-		kartenleserEin();
+		if (Wlan.wechselOffen(this, false) && !netzWartet) {
+			// Stefan 25.11.2026: nach dem Abmelden zuerst ins allgemeine WLAN, mit Anzeige; Karte und
+			// QR erst, wenn die Anlage wieder erreichbar ist (sonst laeuft eine Anmeldung ins Leere).
+			netzWartet = true;
+			zeige("Abgemeldet – verbinde mit dem allgemeinen WLAN …", false);
+			final android.content.Context app = getApplicationContext();
+			new Thread(() -> {
+				boolean neu = Wlan.fuerAbmeldung(app);
+				long bis = System.currentTimeMillis() + 45_000;
+				try { if (neu) Thread.sleep(4000); } catch (InterruptedException ignored) { }
+				while (System.currentTimeMillis() < bis) {
+					try { Anlage.status(app); break; }
+					catch (Exception e) {
+						runOnUiThread(() -> zeige("Warte auf das WLAN … gleich geht es weiter", false));
+						try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
+					}
+				}
+				runOnUiThread(() -> {
+					netzWartet = false;
+					zeige("", false);
+					if (laeuft && !kameraAn) kartenleserEin();
+				});
+			}, "Abmeldung").start();
+		} else if (!netzWartet) {
+			kartenleserEin();
+		}
 		handler.post(takt);
 	}
+
+	/** Nach dem Abmelden: WLAN-Wechsel laeuft, Kartenleser erst danach. */
+	private volatile boolean netzWartet;
 
 	@Override
 	protected void onPause() {
@@ -157,7 +185,7 @@ public class SperrActivity extends Activity {
 
 	// Fokus zurueck (z.B. nach Samsungs Ausschaltmenue): Android gibt dabei den Lesemodus frei und
 	// nimmt unseren mit (Stefan 25.11.2026: "komme nicht mehr mit dem Chip rein"). Kurz danach neu ein.
-	private final Runnable leserNeu = () -> { if (laeuft && !kameraAn) kartenleserEin(); };
+	private final Runnable leserNeu = () -> { if (laeuft && !kameraAn && !netzWartet) kartenleserEin(); };
 
 	@Override
 	public void onWindowFocusChanged(boolean fokus) {
@@ -234,7 +262,7 @@ public class SperrActivity extends Activity {
 		handler.removeCallbacks(kameraZeitAus);
 		if (kamera != null) kamera.pause();
 		kameraAnzeigen(false);
-		if (laeuft) kartenleserEin();
+		if (laeuft && !netzWartet) kartenleserEin();
 	}
 
 	private void kameraAnzeigen(boolean an) {
@@ -368,7 +396,7 @@ public class SperrActivity extends Activity {
 		runOnUiThread(() -> {
 			meldung.setText(t);
 			meldung.setTextColor(Color.parseColor(fehler ? "#FCA5A5" : "#BBF7D0"));
-			meldung.setVisibility(View.VISIBLE);
+			meldung.setVisibility(t.isEmpty() ? View.GONE : View.VISIBLE);
 		});
 	}
 

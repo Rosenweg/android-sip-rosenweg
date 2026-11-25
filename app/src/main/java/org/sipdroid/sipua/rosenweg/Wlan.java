@@ -50,6 +50,18 @@ public final class Wlan {
 		return einrichten(c);
 	}
 
+	/** Steht der WLAN-Wechsel fuer diesen Zustand (an-/abgemeldet) noch aus? */
+	static boolean wechselOffen(Context c, boolean angemeldet) {
+		return Sperre.istDeviceOwner(c) && prefs(c).getBoolean("angemeldet", !angemeldet) != angemeldet;
+	}
+
+	/** Beim Abmelden: zurueck ins allgemeine WLAN (RK-Clients). Blockierend, true = neu verbunden. */
+	static boolean fuerAbmeldung(Context c) {
+		if (!Sperre.istDeviceOwner(c)) return false;
+		prefs(c).edit().putBoolean("angemeldet", false).putLong("um", System.currentTimeMillis()).apply();
+		return einrichten(c);
+	}
+
 	/** @return true, wenn das Telefon dafuer neu verbunden wurde */
 	static synchronized boolean einrichten(Context c) {
 		try {
