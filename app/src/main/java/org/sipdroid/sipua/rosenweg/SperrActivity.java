@@ -92,7 +92,11 @@ public class SperrActivity extends Activity {
 	private View kameraRahmen;
 	private TextView kartenHinweis;
 	private View logo;
-	private Button qrKnopf, wechselKnopf;
+	private Button qrKnopf, wechselKnopf, kontoKnopf;
+	private TextView anmeldeHinweis;
+	/** Anlage erreichbar? Nur dann Anmelde-Moeglichkeiten zeigen (Stefan 25.11.2026). */
+	private volatile boolean anlageDa;
+	private int fehlversuche;
 	private final Runnable kameraZeitAus = this::kameraStoppen;
 	private static final long KAMERA_MS = 60_000;
 
@@ -144,23 +148,26 @@ public class SperrActivity extends Activity {
 			// Stefan 25.11.2026: nach dem Abmelden zuerst ins allgemeine WLAN, mit Anzeige; Karte und
 			// QR erst, wenn die Anlage wieder erreichbar ist (sonst laeuft eine Anmeldung ins Leere).
 			netzWartet = true;
+			anmeldenZeigen(false, null);
 			zeige("Abgemeldet – verbinde mit dem allgemeinen WLAN …", false);
 			final android.content.Context app = getApplicationContext();
 			new Thread(() -> {
 				boolean neu = Wlan.fuerAbmeldung(app);
 				long bis = System.currentTimeMillis() + 45_000;
 				try { if (neu) Thread.sleep(4000); } catch (InterruptedException ignored) { }
+				boolean ok = false;
 				while (System.currentTimeMillis() < bis) {
-					try { Anlage.status(app); break; }
+					try { Anlage.status(app); ok = true; break; }
 					catch (Exception e) {
 						runOnUiThread(() -> zeige("Warte auf das WLAN … gleich geht es weiter", false));
 						try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
 					}
 				}
+				final boolean erreichbar = ok;
 				runOnUiThread(() -> {
 					netzWartet = false;
-					zeige("", false);
-					if (laeuft && !kameraAn) kartenleserEin();
+					if (erreichbar) anmeldenZeigen(true, null);
+					else anmeldenZeigen(false, "Keine Verbindung zur Telefonanlage – Anmelden ist gerade nicht möglich.\nNotrufe gehen immer.");
 				});
 			}, "Abmeldung").start();
 		} else if (!netzWartet) {
@@ -194,9 +201,32 @@ public class SperrActivity extends Activity {
 		if (fokus) handler.postDelayed(leserNeu, 600);
 	}
 
+	/**
+	 * Anmelde-Moeglichkeiten (Karte, QR, Rosenweg-Konto) nur zeigen, wenn die Anlage erreichbar ist
+	 * (Stefan 25.11.2026). Notruf bleibt immer.
+	 */
+	private void anmeldenZeigen(boolean an, String meldungText) {
+		anlageDa = an;
+		int sicht = an ? View.VISIBLE : View.GONE;
+		if (kartenHinweis != null) kartenHinweis.setVisibility(sicht);
+		if (anmeldeHinweis != null) anmeldeHinweis.setVisibility(sicht);
+		if (kontoKnopf != null) kontoKnopf.setVisibility(sicht);
+		if (qrKnopf != null) qrKnopf.setVisibility(sicht);
+		if (!an) {
+			if (kameraAn) kameraStoppen();
+			if (wechselKnopf != null) wechselKnopf.setVisibility(View.GONE);
+			kartenleserAus();
+			if (meldungText != null) zeige(meldungText, true);
+		} else {
+			zeige("", false);
+			if (laeuft && !kameraAn && !netzWartet) kartenleserEin();
+		}
+	}
+
 	// ─── NFC-Karte ──────────────────────────────────────────────────────────
 
 	private void kartenleserEin() {
+		if (!anlageDa) return;
 		NfcAdapter nfc = NfcAdapter.getDefaultAdapter(this);
 		if (nfc == null) return;
 		try {
@@ -368,6 +398,7 @@ public class SperrActivity extends Activity {
 
 	private void pruefen() {
 		try {
+			if (netzWartet) return;   // WLAN-Wechsel nach dem Abmelden laeuft, das zeigt eigene Meldungen
 			if (!Anlage.eingerichtet(this)) {
 				zeige("Dieses Telefon ist noch nicht eingerichtet.", true);
 				return;
@@ -375,6 +406,8 @@ public class SperrActivity extends Activity {
 			// Neustart mit persoenlicher PIN: erst abmelden, nie wiederherstellen
 			if (!Bildschirmsperre.abmeldungAusfuehren(this)) return;
 			JSONObject s = Anlage.status(this);
+			fehlversuche = 0;
+			if (!anlageDa) runOnUiThread(() -> anmeldenZeigen(true, null));
 			if (s.optBoolean("angemeldet", false) && Nachlauf.aktiv(this)) {
 				zeige("Bitte kurz warten: Dateien der letzten Person werden noch hochgeladen.", true);
 				return;
@@ -384,9 +417,13 @@ public class SperrActivity extends Activity {
 				runOnUiThread(() -> entsperrt(name, s.optJSONArray("apps")));
 			}
 		} catch (Anlage.AnlageFehler e) {
-			if (e.status == 401) zeige("Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben.", true);
+			if (e.status == 401) runOnUiThread(() -> anmeldenZeigen(false,
+					"Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben."));
 		} catch (Exception e) {
 			Log.w(TAG, "pruefen: " + e);
+			// erst nach zwei Fehlversuchen ausblenden (kein Flackern bei kurzen Aussetzern)
+			if (++fehlversuche >= 2 && (anlageDa || fehlversuche == 2)) runOnUiThread(() -> anmeldenZeigen(false,
+					"Keine Verbindung zur Telefonanlage – Anmelden ist gerade nicht möglich.\nNotrufe gehen immer."));
 		} finally {
 			prueft = false;
 		}
@@ -549,6 +586,7 @@ public class SperrActivity extends Activity {
 		l.addView(kartenHinweis);
 
 		TextView hinweis = text(14, grau, false);
+		anmeldeHinweis = hinweis;
 		hinweis.setText("Oder: „QR-Code scannen“ und den Anmelde-QR von\nrosenweg4303.ch/smartphones auf deinem Handy zeigen,\noder unten mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
@@ -562,6 +600,7 @@ public class SperrActivity extends Activity {
 		l.addView(platz, new LinearLayout.LayoutParams(1, 0, 1f));
 
 		Button konto = knopf("Mit Rosenweg-Konto anmelden", "#2563EB");
+		kontoKnopf = konto;
 		konto.setTextColor(Color.WHITE);
 		konto.setOnClickListener(v -> startActivity(new Intent(this, WebAppActivity.class)
 				.putExtra(WebAppActivity.EXTRA_ANMELDEN, true)));
@@ -592,6 +631,7 @@ public class SperrActivity extends Activity {
 		fuss.setText("Notrufe (112, 117, 118, 144) gehen immer.");
 		fuss.setPadding(0, dp(8), 0, 0);
 		l.addView(fuss);
+		anmeldenZeigen(false, "Verbinde mit der Telefonanlage …");
 		return l;
 	}
 }
