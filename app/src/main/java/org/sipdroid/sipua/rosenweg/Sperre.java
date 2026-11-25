@@ -422,6 +422,10 @@ public final class Sperre {
 		// DISALLOW_DEBUGGING_FEATURES schaltet USB-Debugging aus, das Aufheben aber nicht wieder
 		// ein: adb nach dem Entsperren selbst wieder einschalten (Einrichtung, Wartung).
 		if (!sperren) {
+			// Die Sperre blendet auch die Entwickleroptionen aus, und das Aufheben bringt sie nicht
+			// zurueck (Stefan 25.11.2026: "Entwickleroptionen weg"): wieder freischalten wie 7x Buildnummer.
+			try { d.setGlobalSetting(a, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "1"); }
+			catch (Exception e) { Log.w(TAG, "Entwickleroptionen einschalten: " + e); }
 			try { d.setGlobalSetting(a, android.provider.Settings.Global.ADB_ENABLED, "1"); }
 			catch (Exception e) { Log.w(TAG, "adb einschalten: " + e); }
 		}
