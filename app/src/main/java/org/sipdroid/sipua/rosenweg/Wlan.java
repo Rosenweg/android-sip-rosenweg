@@ -69,6 +69,13 @@ public final class Wlan {
 				return;
 			}
 			wm.enableNetwork(id, false);   // erlaubt, aber kein erzwungener Wechsel
+			// Haengt das Telefon schon im "Rosenweg", gilt der neue Schluessel (anderes VLAN, z.B.
+			// nach An-/Abmelden) erst nach einer neuen Verbindung - kurz neu verbinden.
+			if (alt != null && ("\"" + ssid + "\"").equals(wm.getConnectionInfo().getSSID())) {
+				wm.disconnect();
+				wm.reconnect();
+				Log.i(TAG, "neu verbunden (" + netz + ")");
+			}
 			// Einrichtung gegen Aendern/Vergessen durch Benutzer sperren (nur Device Owner aendert)
 			try {
 				Sperre.dpm(c).setConfiguredNetworksLockdownState(Sperre.admin(c), true);
