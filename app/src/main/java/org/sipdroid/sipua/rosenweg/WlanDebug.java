@@ -26,9 +26,31 @@ public class WlanDebug extends BroadcastReceiver {
 	/** Nachpruefen, solange zentral eingeschaltet: an? Port noch gleich? */
 	private static final long PRUEFEN_MS = 5 * 60 * 1000L;
 	private static final long NOCHMALS_MS = 5 * 60 * 1000L;
+	/** Nach Netzwechsel: wieder einschalten, aber nicht oefter als alle 30 s (Android-Dialog). */
+	private static final long WIEDER_MS = 30 * 1000L;
+
+	/**
+	 * Stand 25.11.2026 (Stefan): klassisches adb ueber TCP (Port 5555, einmal "adb tcpip 5555")
+	 * statt "Debugging ueber WLAN". Android stellt Letzteres bei jedem neuen Zugangspunkt ab und
+	 * fragt bei gesperrtem Bildschirm gar nicht erst ("startConfirmationForNetwork:
+	 * isLockScreenMode"). Zentral geschaltet wird darum nur noch adb selbst (ADB_ENABLED): an =
+	 * adbd laeuft (USB und Port 5555), aus = kein adbd. Verbinden darf nur ein Rechner mit
+	 * bekanntem Schluessel. Nach einem Neustart des Telefons ist Port 5555 weg (einmal USB).
+	 */
+	static final int TCP_PORT = 5555;
 
 	public static boolean an(Context c) {
-		return Settings.Global.getInt(c.getContentResolver(), "adb_wifi_enabled", 0) == 1;
+		return Settings.Global.getInt(c.getContentResolver(), Settings.Global.ADB_ENABLED, 0) == 1;
+	}
+
+	/** Hoert adbd auf Port 5555? (blockierend, nicht im UI-Thread) */
+	static boolean tcpOffen() {
+		try (java.net.Socket so = new java.net.Socket()) {
+			so.connect(new java.net.InetSocketAddress("127.0.0.1", TCP_PORT), 1000);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	/** Debugging ueber WLAN nur in diesem WLAN (Stefan 25.11.2026). */
@@ -113,14 +135,13 @@ public class WlanDebug extends BroadcastReceiver {
 				.putLong("versuch_um", System.currentTimeMillis()).apply();
 		try {
 			Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), Settings.Global.ADB_ENABLED, "1");
-			Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), "adb_wifi_enabled", "1");
 		} catch (Exception e) {
 			Log.w(TAG, "einschalten: " + e);
 			return "Android lässt das nicht zu: " + e.getClass().getSimpleName();
 		}
 		AlarmManager am = c.getSystemService(AlarmManager.class);
 		am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + dauerMs, ausIntent(c));
-		Log.i(TAG, "Debugging ueber WLAN an (" + dauerMs / 60000 + " min)");
+		Log.i(TAG, "adb an (" + dauerMs / 60000 + " min)");
 		// Port erscheint erst nach dem Start von adbd (und ggf. der Bestaetigung) - etwas warten
 		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> portMelden(c), 8000);
 		return an(c) ? null : "Eingeschaltet, Android meldet es aber noch nicht als aktiv";
@@ -130,8 +151,8 @@ public class WlanDebug extends BroadcastReceiver {
 		try {
 			c.getSystemService(AlarmManager.class).cancel(ausIntent(c));
 			if (Sperre.istDeviceOwner(c) && an(c)) {
-				Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), "adb_wifi_enabled", "0");
-				Log.i(TAG, "Debugging ueber WLAN aus");
+				Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), Settings.Global.ADB_ENABLED, "0");
+				Log.i(TAG, "adb aus");
 			}
 			c.getSystemService(AlarmManager.class).cancel(pruefIntent(c));
 			melden(c, "", 0);
@@ -180,6 +201,44 @@ public class WlanDebug extends BroadcastReceiver {
 		pruefenPlanen(c);
 	}
 
+	private static android.database.ContentObserver beobachter;
+
+	/**
+	 * Android stellt "Debugging ueber WLAN" bei jedem Netzwechsel ab ("Detected wifi network
+	 * change. Disabling adbwifi." - schon beim Wechsel 2,4 -> 5 GHz am selben Zugangspunkt,
+	 * typisch kurz nach dem Ausschalten des Bildschirms). Solange es zentral an ist: sofort
+	 * wieder einschalten (hoechstens alle 30 s) und den neuen Port melden. Geht auch bei
+	 * gesperrtem Bildschirm (Device Owner).
+	 */
+	public static synchronized void beobachten(Context c) {
+		if (beobachter != null) return;
+		final Context app = c.getApplicationContext();
+		final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+		beobachter = new android.database.ContentObserver(h) {
+			@Override
+			public void onChange(boolean selbst) {
+				long bis = prefs(app).getLong("zentral_bis", 0);
+				if (bis <= System.currentTimeMillis() / 1000) return;
+				if (an(app)) {
+					h.postDelayed(() -> portMelden(app), 5000);
+					return;
+				}
+				// kurz warten, bis das neue Netz steht
+				h.postDelayed(() -> {
+					if (an(app) || System.currentTimeMillis() - prefs(app).getLong("versuch_um", 0) < WIEDER_MS) return;
+					String f = einschalten(app, bis * 1000L - System.currentTimeMillis());
+					Log.i(TAG, "von Android abgestellt (Netzwechsel), wieder an" + (f == null ? "" : " - " + f));
+				}, 3000);
+			}
+		};
+		try {
+			app.getContentResolver().registerContentObserver(
+					Settings.Global.getUriFor(Settings.Global.ADB_ENABLED), false, beobachter);
+		} catch (Exception e) {
+			Log.w(TAG, "beobachten: " + e.getClass().getSimpleName());
+		}
+	}
+
 	// ─── Port per mDNS finden (adbd meldet "_adb-tls-connect._tcp") ──────────────────
 
 	private static volatile boolean sucht;
@@ -190,6 +249,18 @@ public class WlanDebug extends BroadcastReceiver {
 		sucht = true;
 		final Context app = c.getApplicationContext();
 		final String eigene = adresse(app);
+		// Normalfall: Port 5555 (adb tcpip); sonst ein von Hand eingeschaltetes "Debugging ueber WLAN"
+		new Thread(() -> {
+			if (tcpOffen()) {
+				sucht = false;
+				melden(app, eigene, TCP_PORT);
+			} else {
+				new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> mdnsSuchen(app, eigene));
+			}
+		}).start();
+	}
+
+	private static void mdnsSuchen(final Context app, final String eigene) {
 		final android.net.nsd.NsdManager nsd = app.getSystemService(android.net.nsd.NsdManager.class);
 		final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
 		final android.net.nsd.NsdManager.DiscoveryListener[] dl = new android.net.nsd.NsdManager.DiscoveryListener[1];
