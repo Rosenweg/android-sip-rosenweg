@@ -62,6 +62,28 @@ public class SperrActivity extends Activity {
 	private volatile boolean loestEin;   // gescannter QR wird eingeloest
 	private String zuletztGescannt;
 	private long zuletztGescanntUm;
+	private View suchEbene;
+	static volatile SperrActivity aktiv;
+
+	/** Suche im Sperrbildschirm zeigen; false, wenn er nicht laeuft (dann eigenes Suchfenster). */
+	static boolean zeigeSuche() {
+		SperrActivity a = aktiv;
+		if (a == null || a.isFinishing()) return false;
+		a.runOnUiThread(() -> { if (a.suchEbene != null) a.suchEbene.setVisibility(View.VISIBLE); });
+		return true;
+	}
+
+	static void versteckeSuche() {
+		SperrActivity a = aktiv;
+		if (a != null) a.runOnUiThread(() -> { if (a.suchEbene != null) a.suchEbene.setVisibility(View.GONE); });
+	}
+
+	@Override
+	protected void onDestroy() {
+		if (aktiv == this) aktiv = null;
+		super.onDestroy();
+	}
+
 	private boolean frontkamera = false;   // hintere Kamera; die vordere war nur fuer den Emulator
 	// Kamera nur auf Wunsch: laeuft die hintere Kamera, liest das A15 keine NFC-Karten
 	// (Antenne neben der Kamera). Standard ist darum der Kartenleser.
@@ -80,7 +102,19 @@ public class SperrActivity extends Activity {
 			setShowWhenLocked(true);
 			setTurnScreenOn(true);
 		}
-		setContentView(Raender.freihalten(baueOberflaeche()));
+		// Ebene fuer "Telefon suchen" ueber dem Sperrbildschirm (ohne Aufgabenwechsel, der
+		// Kiosk-Modus bleibt dicht; ein eigenes Fenster wurde hier alle paar Sekunden verdraengt)
+		android.widget.FrameLayout wurzel = new android.widget.FrameLayout(this);
+		wurzel.addView(Raender.freihalten(baueOberflaeche()));
+		suchEbene = SuchAktivitaet.ansicht(this, () -> {
+			suchEbene.setVisibility(View.GONE);
+			Suchen.gefunden(getApplicationContext());
+		});
+		suchEbene.setVisibility(View.GONE);
+		wurzel.addView(suchEbene, new android.widget.FrameLayout.LayoutParams(
+				android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+		setContentView(wurzel);
+		aktiv = this;
 		// Sicherstellen, dass die SIP-Engine laeuft (startet sie, falls noch nicht).
 		org.sipdroid.sipua.ui.Receiver.engine(this);
 		Katalog.vielleichtAbgleichen(this, false);

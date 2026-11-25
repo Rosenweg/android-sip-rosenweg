@@ -35,14 +35,29 @@ public class SuchAktivitaet extends Activity {
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		offen = this;
 
-		LinearLayout l = new LinearLayout(this);
+		setContentView(ansicht(this, () -> {
+			Suchen.gefunden(getApplicationContext());
+			finish();
+		}));
+	}
+
+	@Override
+	protected void onDestroy() {
+		if (offen == this) offen = null;
+		super.onDestroy();
+	}
+
+	/** Blaue Vollbild-Ansicht "Telefon gesucht" mit "Gefunden" (auch im Sperrbildschirm verwendet). */
+	static android.view.View ansicht(android.content.Context c, Runnable gefundenKlick) {
+		LinearLayout l = new LinearLayout(c);
 		l.setOrientation(LinearLayout.VERTICAL);
 		l.setGravity(Gravity.CENTER);
 		l.setBackgroundColor(Color.parseColor("#1E3A8A"));
-		int p = dp(28);
+		l.setClickable(true);   // Beruehrungen nicht an die Ansicht darunter durchreichen
+		int p = dp(c, 28);
 		l.setPadding(p, p, p, p);
 
-		TextView titel = new TextView(this);
+		TextView titel = new TextView(c);
 		titel.setText("🔔  Telefon gesucht");
 		titel.setTextColor(Color.WHITE);
 		titel.setTypeface(Typeface.DEFAULT_BOLD);
@@ -50,46 +65,30 @@ public class SuchAktivitaet extends Activity {
 		titel.setGravity(Gravity.CENTER);
 		l.addView(titel);
 
-		TextView text = new TextView(this);
-		text.setText("Jemand sucht dieses Telefon.\nNebenstelle " + Anlage.nebenstelle(this));
+		TextView text = new TextView(c);
+		text.setText("Jemand sucht dieses Telefon.\nNebenstelle " + Anlage.nebenstelle(c));
 		text.setTextColor(Color.parseColor("#DBEAFE"));
 		text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
 		text.setGravity(Gravity.CENTER);
-		text.setPadding(0, dp(16), 0, dp(40));
+		text.setPadding(0, dp(c, 16), 0, dp(c, 40));
 		l.addView(text);
 
-		Button gefunden = new Button(this);
+		Button gefunden = new Button(c);
 		gefunden.setText("Gefunden");
 		gefunden.setAllCaps(false);
 		gefunden.setTextColor(Color.WHITE);
 		gefunden.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
 		GradientDrawable g = new GradientDrawable();
 		g.setColor(Color.parseColor("#16A34A"));
-		g.setCornerRadius(dp(16));
+		g.setCornerRadius(dp(c, 16));
 		gefunden.setBackground(g);
-		gefunden.setOnClickListener(v -> {
-			Suchen.gefunden(getApplicationContext());
-			finish();
-		});
-		l.addView(gefunden, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(72)));
-		setContentView(l);
+		gefunden.setOnClickListener(v -> gefundenKlick.run());
+		l.addView(gefunden, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(c, 72)));
+		return l;
 	}
 
-	@Override
-	protected void onDestroy() {
-		if (offen == this) offen = null;
-		// Niemand angemeldet: Das Suchfenster lief in einer eigenen Lock-Task-Aufgabe; mit ihrem
-		// Ende endet der Kiosk-Modus. Den Rosenweg-Sperrbildschirm sofort zurueckholen (er startet
-		// den Lock-Task selbst wieder), sonst laege die Startseite offen (gefunden 25.11.2026).
-		if (!Anlage.angemeldet(this)) {
-			try {
-				startActivity(new android.content.Intent(this, SperrActivity.class)
-						.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK));
-			} catch (Exception e) {
-				android.util.Log.w("RosenwegSuchen", "Sperrbildschirm zurueck: " + e);
-			}
-		}
-		super.onDestroy();
+	private static int dp(android.content.Context c, int v) {
+		return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics()));
 	}
 
 	/** Suche vorbei (Anrufer hat aufgegeben / 45 s um): Fenster schliessen. */
@@ -98,7 +97,4 @@ public class SuchAktivitaet extends Activity {
 		if (a != null) a.runOnUiThread(a::finish);
 	}
 
-	private int dp(int v) {
-		return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
-	}
 }

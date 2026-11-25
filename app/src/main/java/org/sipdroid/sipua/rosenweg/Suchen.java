@@ -54,11 +54,15 @@ public final class Suchen {
 			} catch (Exception e) {
 				Log.w(TAG, "Klingelton: " + e);
 			}
-			try {
-				c.startActivity(new android.content.Intent(c, SuchAktivitaet.class)
-						.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP));
-			} catch (Exception e) {
-				Log.w(TAG, "Suchfenster: " + e);
+			// Niemand angemeldet: der Rosenweg-Sperrbildschirm zeigt die Suche selbst
+			// (Kiosk-Modus bleibt dicht). Angemeldet: eigenes Suchfenster.
+			if (Anlage.angemeldet(c) || !SperrActivity.zeigeSuche()) {
+				try {
+					c.startActivity(new android.content.Intent(c, SuchAktivitaet.class)
+							.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP));
+				} catch (Exception e) {
+					Log.w(TAG, "Suchfenster: " + e);
+				}
 			}
 		} catch (Exception e) {   // z.B. "Nicht stoeren" ohne Zugriff
 			Log.w(TAG, "laut: " + e);
@@ -71,6 +75,7 @@ public final class Suchen {
 			klingel = null;
 		}
 		SuchAktivitaet.schliessen();
+		SperrActivity.versteckeSuche();
 		if (alterModus < 0 && alterFilter < 0) return;
 		try {
 			AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
