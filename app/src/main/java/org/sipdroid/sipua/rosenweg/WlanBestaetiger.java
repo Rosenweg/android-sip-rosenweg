@@ -27,18 +27,18 @@ public class WlanBestaetiger extends AccessibilityService {
 		if (!WlanDebug.erwartetBestaetigung(this)) return;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
 		if (wurzel == null) return;
-		// nur der Dialog mit dem SSID "Rosenweg"
-		if (!enthaelt(wurzel, "\"" + WlanDebug.SSID + "\"") && !nurText(wurzel, WlanDebug.SSID)) return;
+		// nur der Dialog mit dem Netz "Rosenweg" (erwartetBestaetigung prueft zusaetzlich das aktuelle WLAN).
+		// Samsung zeigt den Namen nicht als eigenes Textfeld - es genuegt, dass er im Dialog steht.
+		if (!enthaeltTeil(wurzel, WlanDebug.SSID)) return;
 		if (wurzel.findAccessibilityNodeInfosByText("Debugging").isEmpty()
 				&& wurzel.findAccessibilityNodeInfosByText("debugging").isEmpty()) return;
-		for (String t : new String[]{"Immer in diesem Netzwerk zulassen", "Always allow on this network"}) {
-			for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(t)) {
-				AccessibilityNodeInfo k = n.isCheckable() ? n : n.getParent();
-				if (k != null && k.isCheckable() && !k.isChecked()) k.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-				else if (!n.isChecked()) n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-			}
+		// "immer in diesem Netzwerk": AOSP-Text oder das einzige ankreuzbare Element (Samsung)
+		AccessibilityNodeInfo kaestchen = ankreuzbar(wurzel);
+		if (kaestchen != null && !kaestchen.isChecked()) {
+			kaestchen.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+			return;   // beim naechsten Ereignis (angekreuzt) auf Erlauben tippen
 		}
-		for (String t : new String[]{"Zulassen", "Allow"}) {
+		for (String t : new String[]{"Erlauben", "Zulassen", "Allow"}) {
 			for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(t)) {
 				CharSequence txt = n.getText();
 				if (txt != null && txt.toString().trim().equalsIgnoreCase(t) && n.isClickable()) {
@@ -49,6 +49,14 @@ public class WlanBestaetiger extends AccessibilityService {
 				}
 			}
 		}
+	}
+
+	private static boolean enthaeltTeil(AccessibilityNodeInfo w, String text) {
+		for (AccessibilityNodeInfo n : w.findAccessibilityNodeInfosByText(text)) {
+			CharSequence t = n.getText();
+			if (t != null && t.toString().contains(text)) return true;
+		}
+		return false;
 	}
 
 	/**
