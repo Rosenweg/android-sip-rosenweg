@@ -242,6 +242,33 @@ public class AdbSelbst {
 		}
 	}
 
+	// ─── Einstellungen, die nur adb setzen darf, selbst pruefen ───────────────
+
+	/**
+	 * Seitentaste lang = Ausschaltmenue (Stefan 25.11.2026: Samsung stellte power_button_long_press
+	 * still auf 101 zurueck, dann passierte beim langen Druecken nichts, auch kein Neustart).
+	 * Global-Einstellungen, die der Device Owner nicht setzen darf: ueber den eigenen adb-Zugang.
+	 * Nur wenn etwas abweicht; blockierend, nicht im UI-Thread.
+	 */
+	public static synchronized void einstellungenPruefen(Context c) {
+		android.content.ContentResolver r = c.getContentResolver();
+		StringBuilder cmd = new StringBuilder();
+		if (Settings.Global.getInt(r, "power_button_long_press", 1) != 1) cmd.append("settings put global power_button_long_press 1;");
+		if (Settings.Global.getInt(r, "function_key_config_longpress_type", 0) != 0) cmd.append("settings put global function_key_config_longpress_type 0;");
+		if (cmd.length() == 0 || !freigegeben(c) || !WlanDebug.tcpOffen()) return;
+		Verbindung v = null;
+		try {
+			v = verbindung(c);
+			if (!v.connect("127.0.0.1", WlanDebug.TCP_PORT)) return;
+			befehl(v, "shell:" + cmd);
+			Log.i(TAG, "Seitentaste korrigiert: " + cmd);
+		} catch (Exception e) {
+			Log.w(TAG, "Einstellungen pruefen: " + e.getClass().getSimpleName());
+		} finally {
+			try { if (v != null) v.disconnect(); } catch (Exception ignored) { }
+		}
+	}
+
 	// ─── Nach dem Neustart: Port 5555 selbst wiederherstellen ─────────────────
 
 	/** Nach dem Start im Hintergrund versuchen (mehrmals, bis das WLAN steht). */
@@ -303,6 +330,7 @@ public class AdbSelbst {
 		}
 		if (offen) {
 			Log.i(TAG, "Port " + WlanDebug.TCP_PORT + " wiederhergestellt");
+			einstellungenPruefen(c);
 			if (WlanDebug.zentralAn(c)) WlanDebug.portMelden(c);
 			return null;
 		}

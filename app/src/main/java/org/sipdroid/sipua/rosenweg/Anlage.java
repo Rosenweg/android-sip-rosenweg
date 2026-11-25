@@ -157,6 +157,12 @@ public final class Anlage {
 				if (technik) Sperre.entwickleroptionen(c, true);
 			}
 		}
+		// Seitentaste & Co. (nur ueber adb setzbar): hoechstens stuendlich pruefen
+		if (System.currentTimeMillis() - prefs(c).getLong("einst_geprueft", 0) > 3600_000L) {
+			prefs(c).edit().putLong("einst_geprueft", System.currentTimeMillis()).apply();
+			final Context app = c.getApplicationContext();
+			new Thread(() -> AdbSelbst.einstellungenPruefen(app), "EinstPruefen").start();
+		}
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
 		if (s.has("wlan_debug_bis")) WlanDebug.zentral(c, s.optLong("wlan_debug_bis", 0));

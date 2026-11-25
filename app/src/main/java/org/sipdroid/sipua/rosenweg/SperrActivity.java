@@ -155,6 +155,17 @@ public class SperrActivity extends Activity {
 		super.onPause();
 	}
 
+	// Fokus zurueck (z.B. nach Samsungs Ausschaltmenue): Android gibt dabei den Lesemodus frei und
+	// nimmt unseren mit (Stefan 25.11.2026: "komme nicht mehr mit dem Chip rein"). Kurz danach neu ein.
+	private final Runnable leserNeu = () -> { if (laeuft && !kameraAn) kartenleserEin(); };
+
+	@Override
+	public void onWindowFocusChanged(boolean fokus) {
+		super.onWindowFocusChanged(fokus);
+		handler.removeCallbacks(leserNeu);
+		if (fokus) handler.postDelayed(leserNeu, 600);
+	}
+
 	// ─── NFC-Karte ──────────────────────────────────────────────────────────
 
 	private void kartenleserEin() {

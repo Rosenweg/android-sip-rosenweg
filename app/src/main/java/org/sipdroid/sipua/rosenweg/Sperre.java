@@ -312,7 +312,8 @@ public final class Sperre {
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
 		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen
-		entwickleroptionen(c, false);   // Stefan 25.11.2026: beim Abmelden wieder aus (adb bleibt)
+		// Entwickleroptionen bleiben hier sichtbar: Android schaltet sie mit adb (Wartung) zwingend ein.
+		// Abgemeldet sind die Einstellungen im Kiosk ohnehin nicht erreichbar (Stefan: "so gut").
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
 		sipPersonGeaendert(c);    // Rosenweg Telefon: persoenliches SIP-Konto abmelden
