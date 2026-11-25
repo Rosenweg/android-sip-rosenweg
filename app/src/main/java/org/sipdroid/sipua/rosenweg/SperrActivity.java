@@ -383,6 +383,36 @@ public class SperrActivity extends Activity {
 		handler.removeCallbacks(takt);
 		kamera.pause();
 		kartenleserAus();
+		// Stefan 25.11.2026: zuerst auf das WLAN der Person warten und das anzeigen. Vorher kam der
+		// Startbildschirm halb (nur Telefon) und die Rechte falsch, weil das WLAN gerade wechselte.
+		zeige("Angemeldet" + (name == null || name.isEmpty() ? "" : " als " + name) + " – verbinde mit deinem WLAN …", false);
+		final android.content.Context app = getApplicationContext();
+		new Thread(() -> {
+			org.json.JSONArray a = apps;
+			boolean neu = Wlan.fuerAnmeldung(app);
+			long bis = System.currentTimeMillis() + 45_000;
+			try { if (neu) Thread.sleep(4000); } catch (InterruptedException ignored) { }
+			while (true) {
+				try {
+					org.json.JSONObject st = Anlage.status(app);
+					if (st.optJSONArray("apps") != null) a = st.optJSONArray("apps");
+					break;
+				} catch (Exception e) {
+					if (System.currentTimeMillis() > bis) {
+						Log.w(TAG, "Anmeldung: Anlage nach 45 s noch nicht erreichbar, weiter mit dem Stand der Anmeldung");
+						break;
+					}
+					runOnUiThread(() -> zeige("Warte auf das WLAN … gleich geht es weiter", false));
+					try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
+				}
+			}
+			final org.json.JSONArray fertig = a;
+			runOnUiThread(() -> anmeldungAbschliessen(name, fertig));
+		}, "Anmeldung").start();
+	}
+
+	private void anmeldungAbschliessen(String name, org.json.JSONArray apps) {
+		if (isFinishing()) return;
 		Sperre.freigeben(this, name, apps);
 		if (imLockTask()) {
 			try {

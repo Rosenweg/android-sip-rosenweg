@@ -40,11 +40,22 @@ public final class Wlan {
 		new Thread(() -> einrichten(app), "Wlan").start();
 	}
 
-	static synchronized void einrichten(Context c) {
+	/**
+	 * Beim Anmelden (Stefan 25.11.2026): das WLAN der Person sofort einrichten, nicht nebenbei.
+	 * Blockierend. true = das Telefon verbindet sich gerade neu (anderes VLAN) - dann auf das Netz warten.
+	 */
+	static boolean fuerAnmeldung(Context c) {
+		if (!Sperre.istDeviceOwner(c)) return false;
+		prefs(c).edit().putBoolean("angemeldet", true).putLong("um", System.currentTimeMillis()).apply();
+		return einrichten(c);
+	}
+
+	/** @return true, wenn das Telefon dafuer neu verbunden wurde */
+	static synchronized boolean einrichten(Context c) {
 		try {
 			JSONObject w = Anlage.wlan(c);
 			String ssid = w.optString("ssid", ""), pw = w.optString("passwort", ""), netz = w.optString("netz", "");
-			if (ssid.isEmpty() || pw.length() < 8) return;
+			if (ssid.isEmpty() || pw.length() < 8) return false;
 			String pruef = sha(ssid + "\n" + pw);
 			WifiManager wm = c.getSystemService(WifiManager.class);
 			WifiConfiguration alt = null;
@@ -52,7 +63,7 @@ public final class Wlan {
 			if (liste != null) for (WifiConfiguration k : liste) {
 				if (("\"" + ssid + "\"").equals(k.SSID)) { alt = k; break; }
 			}
-			if (alt != null && pruef.equals(prefs(c).getString("pruef", ""))) return;   // unveraendert
+			if (alt != null && pruef.equals(prefs(c).getString("pruef", ""))) return false;   // unveraendert
 			WifiConfiguration k = new WifiConfiguration();
 			k.SSID = "\"" + ssid + "\"";
 			k.preSharedKey = "\"" + pw + "\"";
@@ -66,14 +77,16 @@ public final class Wlan {
 			}
 			if (id < 0) {
 				Log.w(TAG, "WLAN " + ssid + " nicht eingerichtet");
-				return;
+				return false;
 			}
 			wm.enableNetwork(id, false);   // erlaubt, aber kein erzwungener Wechsel
+			boolean neu = false;
 			// Haengt das Telefon schon im "Rosenweg", gilt der neue Schluessel (anderes VLAN, z.B.
 			// nach An-/Abmelden) erst nach einer neuen Verbindung - kurz neu verbinden.
 			if (alt != null && ("\"" + ssid + "\"").equals(wm.getConnectionInfo().getSSID())) {
 				wm.disconnect();
 				wm.reconnect();
+				neu = true;
 				Log.i(TAG, "neu verbunden (" + netz + ")");
 			}
 			// Einrichtung gegen Aendern/Vergessen durch Benutzer sperren (nur Device Owner aendert)
@@ -84,8 +97,10 @@ public final class Wlan {
 			}
 			prefs(c).edit().putString("pruef", pruef).putString("netz", netz).apply();
 			Log.i(TAG, "WLAN " + ssid + " eingerichtet (" + netz + ")");
+			return neu;
 		} catch (Exception e) {
 			Log.w(TAG, "WLAN: " + e.getClass().getSimpleName());
+			return false;
 		}
 	}
 
