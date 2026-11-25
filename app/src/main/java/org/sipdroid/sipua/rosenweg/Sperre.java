@@ -312,6 +312,7 @@ public final class Sperre {
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
 		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen
+		entwickleroptionen(c, false);   // Stefan 25.11.2026: beim Abmelden wieder aus (adb bleibt)
 		grundregeln(c);   // setzt u.a. die Lock-Task-Erlaubnisliste wieder
 		Receiver.updatePhoneAccount(c);
 		sipPersonGeaendert(c);    // Rosenweg Telefon: persoenliches SIP-Konto abmelden
@@ -378,6 +379,7 @@ public final class Sperre {
 					boolean technik = s.optBoolean("technik");
 					Anlage.prefs(app).edit().putBoolean(PREF_TECHNIK, technik).apply();
 					einstellungenSperren(app, !technik);
+					if (technik) entwickleroptionen(app, true);
 				}
 			} catch (Exception e) {
 				// Anlage nicht erreichbar (z.B. Nebenstelle umgestellt): den letzten bekannten Stand
@@ -422,14 +424,29 @@ public final class Sperre {
 		// DISALLOW_DEBUGGING_FEATURES schaltet USB-Debugging aus, das Aufheben aber nicht wieder
 		// ein: adb nach dem Entsperren selbst wieder einschalten (Einrichtung, Wartung).
 		if (!sperren) {
-			// Die Sperre blendet auch die Entwickleroptionen aus, und das Aufheben bringt sie nicht
-			// zurueck (Stefan 25.11.2026: "Entwickleroptionen weg"): wieder freischalten wie 7x Buildnummer.
-			try { d.setGlobalSetting(a, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "1"); }
-			catch (Exception e) { Log.w(TAG, "Entwickleroptionen einschalten: " + e); }
 			try { d.setGlobalSetting(a, android.provider.Settings.Global.ADB_ENABLED, "1"); }
 			catch (Exception e) { Log.w(TAG, "adb einschalten: " + e); }
 		}
 		Log.i(TAG, "Gefaehrliche Einstellungen " + (sperren ? "gesperrt" : "offen"));
+	}
+
+	/**
+	 * Entwickleroptionen (Stefan 25.11.2026): beim Anmelden mit Technik/Praesident ein, beim Abmelden
+	 * wieder aus. Nur das Menue - adb (Wartung, Port 5555) bleibt, wie es war; Android stellt es beim
+	 * Ausblenden sonst mit ab, darum danach den adb-Stand wiederherstellen.
+	 */
+	static void entwickleroptionen(Context c, boolean an) {
+		if (!istDeviceOwner(c)) return;
+		DevicePolicyManager d = dpm(c);
+		ComponentName a = admin(c);
+		boolean adb = android.provider.Settings.Global.getInt(c.getContentResolver(), android.provider.Settings.Global.ADB_ENABLED, 0) == 1;
+		try {
+			d.setGlobalSetting(a, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, an ? "1" : "0");
+			if (adb) d.setGlobalSetting(a, android.provider.Settings.Global.ADB_ENABLED, "1");
+			Log.i(TAG, "Entwickleroptionen " + (an ? "ein" : "aus"));
+		} catch (Exception e) {
+			Log.w(TAG, "Entwickleroptionen " + (an ? "ein" : "aus") + ": " + e);
+		}
 	}
 
 	/** Rosenweg Launcher Bescheid geben (Startseite pro Person, RosenwegStartseite). */

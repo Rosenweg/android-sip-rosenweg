@@ -154,6 +154,7 @@ public final class Anlage {
 			if (technik != prefs(c).getBoolean(Sperre.PREF_TECHNIK, false) || technik) {
 				prefs(c).edit().putBoolean(Sperre.PREF_TECHNIK, technik).apply();
 				Sperre.einstellungenSperren(c, !technik);
+				if (technik) Sperre.entwickleroptionen(c, true);
 			}
 		}
 		Sperre.sperrbildschirmText(c);
