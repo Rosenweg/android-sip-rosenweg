@@ -190,6 +190,13 @@
             <meta-data android:name="android.nfc.action.TECH_DISCOVERED" android:resource="@xml/nfc_karten" />
         </activity>
         <receiver android:name=".rosenweg.InstallEmpfaenger" android:exported="false" />
+        <!-- Rueckmeldung des Rosenweg Launchers: Startseite geladen/zurueckgesetzt (nur Rosenweg-Signatur) -->
+        <receiver android:name=".rosenweg.StartseiteGeladen" android:exported="true"
+            android:permission="ch.rosenweg4303.permission.ANLAGE">
+            <intent-filter>
+                <action android:name="ch.rosenweg4303.telefon.STARTSEITE_GELADEN" />
+            </intent-filter>
+        </receiver>
         <!-- Wartung per USB: nur die adb-Shell hat DUMP. -->
         <receiver android:name=".rosenweg.AdbFreigabe" android:exported="true"
             android:permission="android.permission.DUMP">

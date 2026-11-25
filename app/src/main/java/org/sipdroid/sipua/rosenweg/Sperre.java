@@ -302,6 +302,7 @@ public final class Sperre {
 
 	/** Niemand angemeldet: Sperrbildschirm als HOME, Lock-Task, Statusleiste aus. */
 	public static void sperren(Context c) {
+		abmeldungVormerken(c, false);    // SperrActivity prueft danach jeden Schritt (Einrichtungsbildschirm)
 		Bildschirmsperre.entfernen(c);   // persoenliche PIN weg, bevor jemand anderes kommt
 		Bildschirmsperre.vorbereiten(c); // ohne Sperre ist ein neuer Schluessel sofort aktiv
 		Anlage.merke(c, false, null);
@@ -349,26 +350,7 @@ public final class Sperre {
 		startseite(c, "anmelden"); // Rosenweg Launcher: Startseite der Person laden
 		Receiver.updatePhoneAccount(c);
 		sipPersonGeaendert(c);    // nach Katalog.freigeben: Rosenweg Telefon ist dann sichtbar
-		if (istDeviceOwner(c)) {
-			DevicePolicyManager d = dpm(c);
-			ComponentName a = admin(c);
-			try {
-				// Erlaubnisliste leeren beendet den Lock-Task-Modus zuverlaessig —
-				// stopLockTask() aus der Activity griff nicht, wenn der Task per
-				// lockTaskMode="if_whitelisted" gestartet worden war (Emulator-Test
-				// 23.11.2026: Launcher lief danach in "Lock Task Mode violation").
-				d.setLockTaskPackages(a, new String[0]);
-				d.clearPackagePersistentPreferredActivities(a, c.getPackageName());
-				homeAlias(c, false);
-				rosenwegLauncherAlsHome(c, d, a);
-				d.setStatusBarDisabled(a, false);
-			} catch (Exception e) {
-				Log.e(TAG, "freigeben", e);
-			}
-		}
-		Intent dienst = new Intent(c, AnmeldeDienst.class);
-		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
-		else c.startService(dienst);
+		freigebenAbschluss(c);
 		persoenlichePinSetzen(c.getApplicationContext());
 		// Nextcloud-Zugang schon holen, damit die Apps ihn sofort haben; Einstellungen je nach Gruppe
 		Context app = c.getApplicationContext();
@@ -390,6 +372,35 @@ public final class Sperre {
 				einstellungenSperren(app, !Anlage.prefs(app).getBoolean(PREF_TECHNIK, false));
 			}
 		}).start();
+	}
+
+	/**
+	 * Zweiter Teil von freigeben: Kiosk aus, Rosenweg Launcher als HOME, Statusleiste, AnmeldeDienst.
+	 * Der Einrichtungsbildschirm (SperrActivity) erledigt alles davor selbst, Schritt fuer Schritt
+	 * mit Pruefung, und ruft danach nur noch das hier auf.
+	 */
+	static void freigebenAbschluss(Context c) {
+		abmeldungErledigt(c);   // angemeldet: keine Abmelde-Pruefung mehr offen
+		if (istDeviceOwner(c)) {
+			DevicePolicyManager d = dpm(c);
+			ComponentName a = admin(c);
+			try {
+				// Erlaubnisliste leeren beendet den Lock-Task-Modus zuverlaessig —
+				// stopLockTask() aus der Activity griff nicht, wenn der Task per
+				// lockTaskMode="if_whitelisted" gestartet worden war (Emulator-Test
+				// 23.11.2026: Launcher lief danach in "Lock Task Mode violation").
+				d.setLockTaskPackages(a, new String[0]);
+				d.clearPackagePersistentPreferredActivities(a, c.getPackageName());
+				homeAlias(c, false);
+				rosenwegLauncherAlsHome(c, d, a);
+				d.setStatusBarDisabled(a, false);
+			} catch (Exception e) {
+				Log.e(TAG, "freigeben", e);
+			}
+		}
+		Intent dienst = new Intent(c, AnmeldeDienst.class);
+		if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(dienst);
+		else c.startService(dienst);
 	}
 
 	/**
@@ -450,10 +461,36 @@ public final class Sperre {
 		}
 	}
 
+	/** Nach sperren: Abmelde-Pruefung im Sperrbildschirm offen ("lokal" oder "ausdruecklich"). */
+	static final String PREF_ABMELDUNG = "rosenweg_abmeldung_pruefen";
+
+	/**
+	 * Abmelde-Pruefung vormerken. ausdruecklich = die Person (oder Abbrechen beim Anmelden) hat
+	 * abgemeldet: kennt die Anlage die Sitzung noch, wird nochmals abgemeldet. Sonst (Neustart,
+	 * Update) wird eine Sitzung, die an der Anlage weiterlaeuft, wie bisher wiederhergestellt.
+	 */
+	static void abmeldungVormerken(Context c, boolean ausdruecklich) {
+		if (!ausdruecklich && abmeldungAusdruecklich(c)) return;
+		Anlage.prefs(c).edit().putString(PREF_ABMELDUNG, ausdruecklich ? "ausdruecklich" : "lokal").commit();
+	}
+
+	static boolean abmeldungOffen(Context c) {
+		return !Anlage.prefs(c).getString(PREF_ABMELDUNG, "").isEmpty();
+	}
+
+	static boolean abmeldungAusdruecklich(Context c) {
+		return "ausdruecklich".equals(Anlage.prefs(c).getString(PREF_ABMELDUNG, ""));
+	}
+
+	static void abmeldungErledigt(Context c) {
+		Anlage.prefs(c).edit().remove(PREF_ABMELDUNG).commit();
+	}
+
 	/** Rosenweg Launcher Bescheid geben (Startseite pro Person, RosenwegStartseite). */
 	static void startseite(Context c, String was) {
 		try {
-			c.sendBroadcast(new Intent("ch.rosenweg4303.home.STARTSEITE").setPackage(LAUNCHER_PAKET).putExtra("was", was));
+			c.sendBroadcast(new Intent("ch.rosenweg4303.home.STARTSEITE").setPackage(LAUNCHER_PAKET).putExtra("was", was)
+					.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES));
 		} catch (Exception e) {
 			Log.w(TAG, "Startseite " + was + ": " + e);
 		}

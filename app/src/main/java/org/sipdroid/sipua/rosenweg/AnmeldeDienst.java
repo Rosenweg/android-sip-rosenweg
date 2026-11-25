@@ -110,6 +110,8 @@ public class AnmeldeDienst extends Service {
 			// Trotzdem lokal sperren: wer abmelden drueckt, will das Geraet zu haben.
 		}
 		Aufraeumen.gemeinsamenSpeicherLeeren(this);
+		// Abmelden per Knopf: kennt die Anlage die Sitzung danach noch, meldet der Sperrbildschirm nochmals ab
+		Sperre.abmeldungVormerken(this, true);
 		handler.post(() -> Sperre.sperren(this));
 	}
 
