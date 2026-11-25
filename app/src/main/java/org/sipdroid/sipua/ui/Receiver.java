@@ -287,6 +287,14 @@ import org.zoolu.sip.provider.SipProvider;
 						org.sipdroid.sipua.rosenweg.Suchen.laut(mContext);
 						break;
 					}
+					// Rosenweg: abgemeldet gibt es keine Telefon-App (nicht im Sperrmodus erlaubt,
+					// Anrufliste gehoert der Person) - normale Anrufe an die Nebenstelle ablehnen.
+					if (!org.sipdroid.sipua.rosenweg.Anlage.angemeldet(mContext)
+							&& org.sipdroid.sipua.rosenweg.Anlage.eingerichtet(mContext)) {
+						android.util.Log.i("RosenwegSperre", "Anruf abgelehnt: niemand angemeldet");
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> engine(mContext).rejectcall());
+						break;
+					}
 					// Rosenweg: den Anzeigenamen nicht wegwerfen. Die Anlage setzt dort
 					// den Namen aus dem Rosenweg-Verzeichnis (CNAM); ohne ihn zeigte die
 					// Telefon-App nur die Nummer.

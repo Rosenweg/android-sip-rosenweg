@@ -34,8 +34,8 @@ public final class Sperre {
 
 	/** Was im gesperrten Zustand laufen darf (Lock-Task-Allowlist). */
 	private static final String[] ERLAUBT_GESPERRT = {
-			// Rosenweg Phone (Fossify-Fork): Anruf-Bildschirm, sobald Standard-Telefon-App
-			"ch.rosenweg4303.phone",
+			// Rosenweg Telefon bewusst NICHT: abgemeldet funktioniert nur Rosenweg Geraet
+			// (Telefon suchen); normale Anrufe lehnt der Receiver dann ab.
 			// Samsung (Galaxy A15)
 			"com.samsung.android.incallui",      // Anruf-Bildschirm (eingehend annehmen)
 			"com.samsung.android.emergency",     // Notruf-Waehler, nur Notrufnummern
