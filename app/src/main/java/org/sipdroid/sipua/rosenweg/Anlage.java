@@ -153,6 +153,11 @@ public final class Anlage {
 		return s;
 	}
 
+	/** POST /api/telefon/adb {adresse, port}: Debug-Port fuer "adb connect" auf /smartphones (0 = aus). */
+	public static void adbMelden(Context c, String adresse, int port) throws Exception {
+		anfrage(c, "POST", "/api/telefon/adb", new JSONObject().put("adresse", adresse).put("port", port).toString());
+	}
+
 	/** GET /api/telefon/wlan -> {ssid, netz, vlan, passwort} (PPSK, nie loggen). */
 	public static JSONObject wlan(Context c) throws Exception {
 		return anfrage(c, "GET", "/api/telefon/wlan");

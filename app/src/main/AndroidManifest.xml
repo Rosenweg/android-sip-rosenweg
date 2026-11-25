@@ -87,6 +87,15 @@
         <service android:name=".rosenweg.Nachlauf" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <receiver android:name=".rosenweg.WlanDebug" android:exported="false" />
+        <!-- Samsung-Aufforderungen ("Beenden der Galaxy-Einrichtung") entfernen; Freigabe per adb -->
+        <service android:name=".rosenweg.Benachrichtigungen"
+            android:exported="false"
+            android:label="Rosenweg Gerät"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <service android:name=".rosenweg.WlanBestaetiger"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
