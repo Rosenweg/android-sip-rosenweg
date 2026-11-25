@@ -130,6 +130,8 @@ public final class Katalog {
 				}
 				installieren(c, paket, a.getString("download"), sha);
 			}
+			// neu installierte Rosenweg-Apps bekommen ihre Rechte ohne adb
+			if (Sperre.istDeviceOwner(c)) Sperre.fremdeRechte(c, Sperre.dpm(c), Sperre.admin(c));
 		} catch (Exception e) {
 			Log.w(TAG, "synchronisieren: " + e);
 		}

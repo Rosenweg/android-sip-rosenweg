@@ -221,6 +221,8 @@ public final class Sperre {
 			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
 			d.setLockTaskPackages(a, erlaubt);
 			telefonAppFestlegen(c, d, a);
+			fremdeRechte(c, d, a);    // Einrichtung ohne adb (Stefan 25.11.2026, "A")
+			browserFestlegen(c, d, a);
 			Tastatur.anwenden(c);     // vor dem Ausblenden: die aktive Tastatur bleibt geschuetzt
 			Ausblenden.anwenden(c);   // gemerkte Liste, auch ohne Netz
 			if (Build.VERSION.SDK_INT >= 28) {
@@ -232,6 +234,53 @@ public final class Sperre {
 			}
 		} catch (Exception e) {
 			Log.e(TAG, "grundregeln", e);
+		}
+	}
+
+	/**
+	 * Laufzeitrechte der anderen Rosenweg-Apps, die sonst das Einrichtungsskript per adb
+	 * gab (pm grant). Wird nach jedem Start, Abmelden und Katalog-Abgleich wiederholt:
+	 * Ausblenden/Daten loeschen setzt Rechte zurueck.
+	 */
+	static void fremdeRechte(Context c, DevicePolicyManager d, ComponentName a) {
+		String[][] liste = {
+				{TELEFON_APP, android.Manifest.permission.RECORD_AUDIO, "android.permission.POST_NOTIFICATIONS",
+						android.Manifest.permission.READ_PHONE_STATE, android.Manifest.permission.CALL_PHONE,
+						android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.READ_CALL_LOG,
+						android.Manifest.permission.WRITE_CALL_LOG},
+				{"ch.rosenweg4303.messages", "android.permission.POST_NOTIFICATIONS"},
+		};
+		for (String[] app : liste) {
+			if (!Katalog.installiert(c, app[0])) continue;
+			for (int i = 1; i < app.length; i++) {
+				try {
+					d.setPermissionGrantState(a, app[0], app[i], DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+				} catch (Exception e) {
+					Log.w(TAG, "Recht " + app[0] + " " + app[i] + ": " + e.getMessage());
+				}
+			}
+		}
+	}
+
+	static final String BROWSER_PAKET = "com.android.chrome";
+
+	/** Standard-Browser fest (Weblinks ohne Rueckfrage), wie "cmd role add-role-holder BROWSER". */
+	static void browserFestlegen(Context c, DevicePolicyManager d, ComponentName a) {
+		try {
+			Intent web = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.rosenweg4303.ch"))
+					.addCategory(Intent.CATEGORY_BROWSABLE).setPackage(BROWSER_PAKET);
+			android.content.pm.ResolveInfo ri = c.getPackageManager().resolveActivity(web, 0);
+			if (ri == null || ri.activityInfo == null) return;
+			ComponentName ziel = new ComponentName(ri.activityInfo.packageName, ri.activityInfo.name);
+			for (String schema : new String[]{"http", "https"}) {
+				IntentFilter f = new IntentFilter(Intent.ACTION_VIEW);
+				f.addCategory(Intent.CATEGORY_DEFAULT);
+				f.addCategory(Intent.CATEGORY_BROWSABLE);
+				f.addDataScheme(schema);
+				d.addPersistentPreferredActivity(a, f, ziel);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "Standard-Browser: " + e);
 		}
 	}
 

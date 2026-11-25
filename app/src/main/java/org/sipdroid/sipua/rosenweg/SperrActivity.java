@@ -41,7 +41,7 @@ import java.util.Collections;
 /**
  * Sperrbildschirm des geteilten Telefons: Kamera fuer den Anmelde-QR, NFC-Karte, Notruf.
  *
- * Die Person oeffnet pbx.rosenweg4303.ch/telefon auf dem EIGENEN Handy, meldet
+ * Die Person oeffnet rosenweg4303.ch/smartphones auf dem EIGENEN Handy, meldet
  * sich mit dem Rosenweg-Konto an und haelt den dort angezeigten QR vor die
  * Kamera. Auf diesem Geraet wird nichts eingegeben.
  *
@@ -278,7 +278,7 @@ public class SperrActivity extends Activity {
 			String inhalt = r.getText();
 			if (inhalt == null) return;
 			if (!inhalt.startsWith(QR_PRAEFIX)) {
-				zeige("Das ist kein Rosenweg-Anmelde-QR. Öffne pbx.rosenweg4303.ch/telefon auf deinem Handy.", true);
+				zeige("Das ist kein Rosenweg-Anmelde-QR. Öffne rosenweg4303.ch/smartphones auf deinem Handy.", true);
 				return;
 			}
 			if (loestEin) return;
@@ -480,7 +480,7 @@ public class SperrActivity extends Activity {
 		l.addView(kartenHinweis);
 
 		TextView hinweis = text(14, grau, false);
-		hinweis.setText("Oder: „QR-Code scannen“ und den Anmelde-QR von\npbx.rosenweg4303.ch/telefon auf deinem Handy zeigen,\noder unten mit dem Rosenweg-Konto anmelden.");
+		hinweis.setText("Oder: „QR-Code scannen“ und den Anmelde-QR von\nrosenweg4303.ch/smartphones auf deinem Handy zeigen,\noder unten mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
 
