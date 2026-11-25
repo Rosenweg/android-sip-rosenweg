@@ -94,6 +94,10 @@ public class SperrActivity extends Activity {
 	private View logo;
 	private Button qrKnopf, wechselKnopf, kontoKnopf;
 	private TextView anmeldeHinweis;
+	private TextView kopfText;
+	private LinearLayout schrittListe;
+	private final java.util.List<TextView> schrittZeilen = new java.util.ArrayList<>();
+	private boolean ablaufAktiv;
 	/** Anlage erreichbar? Nur dann Anmelde-Moeglichkeiten zeigen (Stefan 25.11.2026). */
 	private volatile boolean anlageDa;
 	private int fehlversuche;
@@ -149,26 +153,32 @@ public class SperrActivity extends Activity {
 			// QR erst, wenn die Anlage wieder erreichbar ist (sonst laeuft eine Anmeldung ins Leere).
 			netzWartet = true;
 			anmeldenZeigen(false, null);
-			zeige("Abgemeldet – verbinde mit dem allgemeinen WLAN …", false);
+			ablaufStarten("Abmelden", "Abgemeldet", "Zurück ins allgemeine WLAN", "Telefonanlage erreichbar");
+			schritt(0, OK, null);
+			schritt(1, LAEUFT, null);
 			final android.content.Context app = getApplicationContext();
 			new Thread(() -> {
 				boolean neu = Wlan.fuerAbmeldung(app);
+				schritt(1, OK, neu ? "neu verbunden" : null);
+				schritt(2, LAEUFT, null);
 				long bis = System.currentTimeMillis() + 45_000;
 				try { if (neu) Thread.sleep(4000); } catch (InterruptedException ignored) { }
 				boolean ok = false;
 				while (System.currentTimeMillis() < bis) {
 					try { Anlage.status(app); ok = true; break; }
 					catch (Exception e) {
-						runOnUiThread(() -> zeige("Warte auf das WLAN … gleich geht es weiter", false));
+						schritt(2, LAEUFT, "warte auf das WLAN …");
 						try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
 					}
 				}
 				final boolean erreichbar = ok;
-				runOnUiThread(() -> {
+				if (erreichbar) schritt(2, OK, null);
+				else schritt(2, FEHLER, "nicht erreichbar – Anmelden geht erst wieder, wenn die Verbindung steht");
+				handler.postDelayed(() -> {
 					netzWartet = false;
-					if (erreichbar) anmeldenZeigen(true, null);
-					else anmeldenZeigen(false, "Keine Verbindung zur Telefonanlage – Anmelden ist gerade nicht möglich.\nNotrufe gehen immer.");
-				});
+					anlageDa = erreichbar;
+					ablaufEnde();
+				}, erreichbar ? 1500 : 6000);
 			}, "Abmeldung").start();
 		} else if (!netzWartet) {
 			kartenleserEin();
@@ -207,6 +217,7 @@ public class SperrActivity extends Activity {
 	 */
 	private void anmeldenZeigen(boolean an, String meldungText) {
 		anlageDa = an;
+		if (ablaufAktiv) return;   // waehrend An-/Abmelden zeigt der zweite Bildschirm nur die Schritte
 		int sicht = an ? View.VISIBLE : View.GONE;
 		if (kartenHinweis != null) kartenHinweis.setVisibility(sicht);
 		if (anmeldeHinweis != null) anmeldeHinweis.setVisibility(sicht);
@@ -223,6 +234,76 @@ public class SperrActivity extends Activity {
 		}
 	}
 
+	// ─── Ablauf beim An-/Abmelden ─────────────────────────────────────────────
+
+	static final int LAEUFT = 0, OK = 1, FEHLER = 2, WARNUNG = 3;
+
+	/** Titel + Schritte zeigen; Hinweise und Anmelde-Knoepfe weg (Notruf bleibt). */
+	private void ablaufStarten(String titel, String... schritte) {
+		runOnUiThread(() -> {
+			ablaufAktiv = true;
+			kopfText.setText(titel);
+			kopfText.setTextSize(26);
+			kopfText.setTextColor(Color.WHITE);
+			for (View v : new View[]{kartenHinweis, anmeldeHinweis, kontoKnopf, qrKnopf, wechselKnopf, meldung}) {
+				if (v != null) v.setVisibility(View.GONE);
+			}
+			schrittListe.removeAllViews();
+			schrittZeilen.clear();
+			for (String t : schritte) {
+				TextView z = text(17, Color.parseColor("#BFDBFE"), false);
+				z.setGravity(Gravity.START);
+				z.setPadding(0, dp(6), 0, dp(6));
+				z.setText("○  " + t);
+				z.setTag(t);
+				schrittListe.addView(z);
+				schrittZeilen.add(z);
+			}
+			schrittListe.setVisibility(View.VISIBLE);
+		});
+	}
+
+	/** Stand eines Schritts; bei FEHLER/WARNUNG mit kurzer Erklaerung darunter. */
+	private void schritt(int i, int stand, String erklaerung) {
+		runOnUiThread(() -> {
+			if (i < 0 || i >= schrittZeilen.size()) return;
+			TextView z = schrittZeilen.get(i);
+			String t = (String) z.getTag();
+			String zeichen = stand == LAEUFT ? "⏳" : stand == OK ? "✓" : stand == WARNUNG ? "⚠" : "✗";
+			int farbe = stand == LAEUFT ? Color.WHITE : stand == OK ? Color.parseColor("#BBF7D0")
+					: stand == WARNUNG ? Color.parseColor("#FDE68A") : Color.parseColor("#FCA5A5");
+			z.setText(zeichen + "  " + t + (erklaerung == null || erklaerung.isEmpty() ? "" : "\n     " + erklaerung));
+			z.setTextColor(farbe);
+			z.setTypeface(null, stand == LAEUFT ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+		});
+	}
+
+	/** Zurueck zum normalen Sperrbildschirm (nach einem Fehler oder nach dem Abmelden). */
+	private void ablaufEnde() {
+		runOnUiThread(() -> {
+			ablaufAktiv = false;
+			schrittListe.setVisibility(View.GONE);
+			kopfText.setText("Gesperrt · zum Benutzen anmelden");
+			kopfText.setTextSize(15);
+			kopfText.setTextColor(Color.parseColor("#BFDBFE"));
+			anmeldenZeigen(anlageDa, anlageDa ? null
+					: "Keine Verbindung zur Telefonanlage – Anmelden ist gerade nicht möglich.\nNotrufe gehen immer.");
+		});
+	}
+
+	private static final String[] ANMELDE_SCHRITTE = {"Anmeldung bei der Telefonanlage", "Mit deinem WLAN verbinden",
+			"Telefonanlage erreichbar", "Apps und Rechte laden", "Startbildschirm öffnen"};
+
+	/** Anmeldung gescheitert: Schritt rot, nach 8 s zurueck zum Sperrbildschirm. */
+	private void anmeldungFehler(int schrittNr, String meldungText) {
+		schritt(schrittNr, FEHLER, meldungText + " – bitte nochmals versuchen.");
+		handler.postDelayed(() -> {
+			ablaufEnde();
+			laeuft = true;
+			if (!kameraAn && !netzWartet) kartenleserEin();
+		}, 8000);
+	}
+
 	// ─── NFC-Karte ──────────────────────────────────────────────────────────
 
 	private void kartenleserEin() {
@@ -234,8 +315,9 @@ public class SperrActivity extends Activity {
 				String uid = NfcKarte.uid(tag);
 				Log.i(TAG, "Kartenleser: Karte da, uid=" + (uid == null ? "keine" : uid.length() / 2 + " Byte")
 						+ " loestEin=" + loestEin + " laeuft=" + laeuft);
-				if (uid == null || loestEin || !laeuft) return;
-				zeige("Karte erkannt — anmelden …", false);
+				if (uid == null || loestEin || !laeuft || ablaufAktiv) return;
+				ablaufStarten("Anmelden", ANMELDE_SCHRITTE);
+				schritt(0, LAEUFT, "Karte erkannt");
 				NfcKarte.anmelden(getApplicationContext(), uid, new NfcKarte.Ergebnis() {
 					@Override
 					public void angemeldet(JSONObject r) {
@@ -245,7 +327,7 @@ public class SperrActivity extends Activity {
 
 					@Override
 					public void fehler(String meldung) {
-						zeige(meldung, true);
+						anmeldungFehler(0, meldung);
 					}
 				});
 			}, NfcKarte.LESER_FLAGS, null);
@@ -357,7 +439,9 @@ public class SperrActivity extends Activity {
 			zuletztGescannt = inhalt;
 			zuletztGescanntUm = jetzt;
 			loestEin = true;
-			zeige("Anmelden …", false);
+			kameraStoppen();
+			ablaufStarten("Anmelden", ANMELDE_SCHRITTE);
+			schritt(0, LAEUFT, "QR-Code erkannt");
 			new Thread(() -> einloesen(inhalt)).start();
 		}
 	};
@@ -370,12 +454,12 @@ public class SperrActivity extends Activity {
 				runOnUiThread(() -> entsperrt(name, r.optJSONArray("apps")));
 			}
 		} catch (Anlage.AnlageFehler e) {
-			zeige(e.status == 401
-					? "Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben."
-					: e.getMessage(), true);
+			anmeldungFehler(0, e.status == 401
+					? "Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben"
+					: e.getMessage());
 		} catch (Exception e) {
 			Log.w(TAG, "einloesen: " + e);
-			zeige("Keine Verbindung zur Telefonanlage. Notrufe gehen trotzdem.", true);
+			anmeldungFehler(0, "Keine Verbindung zur Telefonanlage");
 		} finally {
 			loestEin = false;
 		}
@@ -398,7 +482,7 @@ public class SperrActivity extends Activity {
 
 	private void pruefen() {
 		try {
-			if (netzWartet) return;   // WLAN-Wechsel nach dem Abmelden laeuft, das zeigt eigene Meldungen
+			if (netzWartet || ablaufAktiv) return;   // An-/Abmelden laeuft, das zeigt eigene Schritte
 			if (!Anlage.eingerichtet(this)) {
 				zeige("Dieses Telefon ist noch nicht eingerichtet.", true);
 				return;
@@ -450,27 +534,42 @@ public class SperrActivity extends Activity {
 		kartenleserAus();
 		// Stefan 25.11.2026: zuerst auf das WLAN der Person warten und das anzeigen. Vorher kam der
 		// Startbildschirm halb (nur Telefon) und die Rechte falsch, weil das WLAN gerade wechselte.
-		zeige("Angemeldet" + (name == null || name.isEmpty() ? "" : " als " + name) + " – verbinde mit deinem WLAN …", false);
+		if (!ablaufAktiv) ablaufStarten("Anmelden", ANMELDE_SCHRITTE);
+		schritt(0, OK, name == null || name.isEmpty() ? null : "angemeldet als " + name);
+		schritt(1, LAEUFT, null);
 		final android.content.Context app = getApplicationContext();
 		new Thread(() -> {
 			org.json.JSONArray a = apps;
 			boolean neu = Wlan.fuerAnmeldung(app);
+			schritt(1, OK, neu ? "neu verbunden" : null);
+			schritt(2, LAEUFT, null);
 			long bis = System.currentTimeMillis() + 45_000;
 			try { if (neu) Thread.sleep(4000); } catch (InterruptedException ignored) { }
+			boolean erreichbar = false;
 			while (true) {
 				try {
 					org.json.JSONObject st = Anlage.status(app);
 					if (st.optJSONArray("apps") != null) a = st.optJSONArray("apps");
+					erreichbar = true;
 					break;
 				} catch (Exception e) {
 					if (System.currentTimeMillis() > bis) {
 						Log.w(TAG, "Anmeldung: Anlage nach 45 s noch nicht erreichbar, weiter mit dem Stand der Anmeldung");
 						break;
 					}
-					runOnUiThread(() -> zeige("Warte auf das WLAN … gleich geht es weiter", false));
+					schritt(2, LAEUFT, "warte auf das WLAN …");
 					try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
 				}
 			}
+			if (erreichbar) {
+				schritt(2, OK, null);
+				schritt(3, OK, a != null ? a.length() + " Apps" : null);
+			} else {
+				schritt(2, WARNUNG, "nach 45 s nicht erreichbar – weiter mit dem Stand der Anmeldung");
+				schritt(3, WARNUNG, "Apps vom Stand der Anmeldung; der Rest kommt, sobald das Netz steht");
+			}
+			schritt(4, LAEUFT, null);
+			try { Thread.sleep(erreichbar ? 600 : 3000); } catch (InterruptedException ignored) { }
 			final org.json.JSONArray fertig = a;
 			runOnUiThread(() -> anmeldungAbschliessen(name, fertig));
 		}, "Anmeldung").start();
@@ -549,6 +648,7 @@ public class SperrActivity extends Activity {
 		l.setPadding(dp(24), dp(40), dp(24), dp(24));
 
 		TextView unter = text(15, grau, false);
+		kopfText = unter;
 		unter.setText("Gesperrt · zum Benutzen anmelden");
 		unter.setPadding(0, dp(4), 0, dp(18));
 		l.addView(unter);
@@ -579,6 +679,13 @@ public class SperrActivity extends Activity {
 		bild.setContentDescription("Rosenweg");
 		l.addView(bild, new LinearLayout.LayoutParams(dp(230), dp(230)));
 		logo = bild;
+
+		// Ablauf beim An-/Abmelden (Stefan 25.11.2026): Schritte mit Stand statt Knoepfen
+		schrittListe = new LinearLayout(this);
+		schrittListe.setOrientation(LinearLayout.VERTICAL);
+		schrittListe.setPadding(dp(8), dp(20), dp(8), 0);
+		schrittListe.setVisibility(View.GONE);
+		l.addView(schrittListe, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
 		kartenHinweis = text(20, hell, true);
 		kartenHinweis.setText("Rosenweg-Karte\nhinten ans Telefon halten");
