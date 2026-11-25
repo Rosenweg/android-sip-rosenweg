@@ -257,6 +257,7 @@ public final class Sperre {
 		Bildschirmsperre.vorbereiten(c); // ohne Sperre ist ein neuer Schluessel sofort aktiv
 		Anlage.merke(c, false, null);
 		Anlage.prefs(c).edit().remove(PREF_TECHNIK).apply();
+		WlanDebug.sitzungEnde(c);   // Kachel-Debugging nie ueber die Sitzung hinaus (zentral bleibt)
 		sperrbildschirmText(c);
 		Sperrbild.fuer(c, "");    // zurueck auf das Rosenweg-Logo
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen

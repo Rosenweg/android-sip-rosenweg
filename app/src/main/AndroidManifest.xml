@@ -86,6 +86,15 @@
         <!-- Rosenweg: nach dem Abmelden offene Dateien fertig hochladen (Nachlauf.java) -->
         <service android:name=".rosenweg.Nachlauf" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <receiver android:name=".rosenweg.WlanDebug" android:exported="false" />
+        <service android:name=".rosenweg.WlanBestaetiger"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/wlan_bestaetiger" />
+        </service>
         <receiver android:name=".rosenweg.BootEntsperren" android:exported="true" android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
@@ -224,6 +233,8 @@
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
 	<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+	<!-- Rosenweg: WLAN-Namen lesen (Debugging ueber WLAN nur im WLAN "Rosenweg") -->
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 	<uses-permission android:name="android.permission.SET_WALLPAPER"/>

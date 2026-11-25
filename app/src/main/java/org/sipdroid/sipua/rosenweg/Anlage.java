@@ -148,6 +148,7 @@ public final class Anlage {
 		merkeNummer(c, s);
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
+		if (s.has("wlan_debug_bis")) WlanDebug.zentral(c, s.optLong("wlan_debug_bis", 0));
 		return s;
 	}
 

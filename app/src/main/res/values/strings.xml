@@ -339,6 +339,7 @@
     <item>3.0</item>
     <item>4.0</item>
 </string-array>
+    <string name="rosenweg_wlan_bestaetiger">Rosenweg Gerät: bestätigt für die Wartung nur die Android-Abfrage „Debugging über WLAN zulassen“ im WLAN „Rosenweg“ – und nur, wenn die Anlage das Debugging eingeschaltet hat.</string>
 </resources>
 
 

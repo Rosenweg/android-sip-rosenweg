@@ -280,6 +280,17 @@ import org.zoolu.sip.provider.SipProvider;
 					if (text2.indexOf("\"") >= 0)
 						text2 = text2.substring(text2.indexOf("\"")+1,text2.lastIndexOf("\""));
 					broadcastCallStateChanged("RINGING", caller);
+					// Rosenweg: Wartungsanruf (2098) - lautlos ablehnen und den Status holen
+					// (zentral eingeschaltetes "Debugging ueber WLAN")
+					if (org.sipdroid.sipua.rosenweg.Suchen.istWartung(text)) {
+						final Context wc = mContext.getApplicationContext();
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> engine(wc).rejectcall());
+						new Thread(() -> {
+							try { org.sipdroid.sipua.rosenweg.Anlage.status(wc); }
+							catch (Exception e) { android.util.Log.w("RosenwegWlanDebug", "Status nach Wartungsanruf: " + e); }
+						}, "Wartung").start();
+						break;
+					}
 					// Rosenweg: Suchanruf der Anlage (2099) klingelt mit voller Lautstaerke
 					if (org.sipdroid.sipua.rosenweg.Suchen.istSuchanruf(text)) {
 						// Suchanruf: eigenes Vollbild "Telefon gesucht" mit "Gefunden" statt der

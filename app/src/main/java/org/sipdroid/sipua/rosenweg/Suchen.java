@@ -19,6 +19,11 @@ public final class Suchen {
 
 	private Suchen() {}
 
+	/** Wartungsanruf der Anlage (2098): lautlos ablehnen, Status holen (WLAN-Debugging). */
+	public static boolean istWartung(String nummer) {
+		return nummer != null && nummer.trim().equals("2098");
+	}
+
 	public static boolean istSuchanruf(String nummer) {
 		return NUMMER.equals(nummer);
 	}

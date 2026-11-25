@@ -125,6 +125,10 @@ public class RosenwegActivity extends Activity {
 			if (Sperre.istDeviceOwner(this)) {
 				l.addView(kachel("Persönliche PIN", "#334155", this::pinDialog), kp);
 			}
+			if (Sperre.istDeviceOwner(this) && Anlage.prefs(this).getBoolean(Sperre.PREF_TECHNIK, false)) {
+				l.addView(kachel(WlanDebug.an(this) ? "Debugging über WLAN: an" : "Debugging über WLAN (1 Std.)",
+						"#334155", this::wlanDebug), new LinearLayout.LayoutParams(kp));
+			}
 			l.addView(kachel("Abmelden", "#DC2626", this::abmelden), new LinearLayout.LayoutParams(kp));
 		}
 		if (!Sperre.istDeviceOwner(this)) {
@@ -212,6 +216,25 @@ public class RosenwegActivity extends Activity {
 			String m = meldung;
 			runOnUiThread(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show());
 		}).start();
+	}
+
+	/** Technik: Debugging ueber WLAN befristet einschalten / ausschalten. */
+	private void wlanDebug() {
+		if (WlanDebug.an(this)) {
+			new AlertDialog.Builder(this).setTitle("Debugging über WLAN")
+					.setMessage("Ist an (Adresse " + WlanDebug.adresse(this) + "). Jetzt ausschalten?")
+					.setPositiveButton("Ausschalten", (d, w) -> { WlanDebug.ausschalten(this); recreate(); })
+					.setNegativeButton("Anlassen", null).show();
+			return;
+		}
+		String fehler = WlanDebug.einschalten(this);
+		new AlertDialog.Builder(this).setTitle("Debugging über WLAN")
+				.setMessage(fehler != null ? fehler
+						: "An für 1 Stunde (beim Abmelden sofort aus).\n\nTelefon: " + WlanDebug.adresse(this)
+						+ "\n\nErstes Mal: Einstellungen › Entwickleroptionen › Debugging über WLAN › "
+						+ "„Gerät mit Kopplungscode koppeln“, dann am Mac\n  adb pair <IP>:<Kopplungsport>\n"
+						+ "Danach findet der Mac das Telefon selbst (adb mdns services) oder\n  adb connect <IP>:<Port>")
+				.setPositiveButton("OK", (d, w) -> recreate()).show();
 	}
 
 	private void abmelden() {
