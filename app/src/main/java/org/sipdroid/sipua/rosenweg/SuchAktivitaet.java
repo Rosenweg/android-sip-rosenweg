@@ -78,6 +78,17 @@ public class SuchAktivitaet extends Activity {
 	@Override
 	protected void onDestroy() {
 		if (offen == this) offen = null;
+		// Niemand angemeldet: Das Suchfenster lief in einer eigenen Lock-Task-Aufgabe; mit ihrem
+		// Ende endet der Kiosk-Modus. Den Rosenweg-Sperrbildschirm sofort zurueckholen (er startet
+		// den Lock-Task selbst wieder), sonst laege die Startseite offen (gefunden 25.11.2026).
+		if (!Anlage.angemeldet(this)) {
+			try {
+				startActivity(new android.content.Intent(this, SperrActivity.class)
+						.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK));
+			} catch (Exception e) {
+				android.util.Log.w("RosenwegSuchen", "Sperrbildschirm zurueck: " + e);
+			}
+		}
 		super.onDestroy();
 	}
 
