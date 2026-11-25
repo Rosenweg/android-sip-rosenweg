@@ -23,6 +23,7 @@ public class WlanBestaetiger extends AccessibilityService {
 
 	@Override
 	public void onAccessibilityEvent(AccessibilityEvent e) {
+		if (AdbSelbst.erwartetFreigabe(this)) schluesselFreigeben();
 		if (!WlanDebug.erwartetBestaetigung(this)) return;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
 		if (wurzel == null) return;
@@ -48,6 +49,52 @@ public class WlanBestaetiger extends AccessibilityService {
 				}
 			}
 		}
+	}
+
+	/**
+	 * C: "USB-Debugging zulassen?" fuer den EIGENEN Schluessel von Rosenweg Geraet (AdbSelbst.
+	 * freigeben). Nur wenn Geraet es gerade angestossen hat UND der angezeigte Fingerabdruck
+	 * genau der eigene ist - fremde Rechner bestaetigt nie die Bedienungshilfe.
+	 */
+	private void schluesselFreigeben() {
+		String fp = AdbSelbst.eigenerFingerabdruck(this);
+		if (fp.isEmpty()) return;
+		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
+		if (wurzel == null) return;
+		boolean passt = false;
+		for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(fp.substring(0, 11))) {
+			CharSequence t = n.getText();
+			if (t != null && t.toString().toUpperCase(java.util.Locale.ROOT).contains(fp)) passt = true;
+		}
+		if (!passt) return;
+		// "Immer zulassen" ankreuzen. Samsung (A15: "Von diesem Computer immer zulassen" / "Erlauben")
+		// hat das Kaestchen als eigenes Element neben dem Text: das einzige ankreuzbare im Dialog.
+		AccessibilityNodeInfo kaestchen = ankreuzbar(wurzel);
+		if (kaestchen == null) return;   // Dialog noch nicht ganz aufgebaut, naechstes Ereignis
+		if (!kaestchen.isChecked()) {
+			kaestchen.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+			return;   // erst wenn das Ereignis "angekreuzt" kommt, auf Erlauben tippen
+		}
+		for (String t : new String[]{"Erlauben", "Zulassen", "Allow", "OK"}) {
+			for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(t)) {
+				CharSequence txt = n.getText();
+				if (txt != null && txt.toString().trim().equalsIgnoreCase(t) && n.isClickable()) {
+					n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+					Log.i(TAG, "eigener adb-Schluessel von Rosenweg Geraet zugelassen (" + fp + ")");
+					return;
+				}
+			}
+		}
+	}
+
+	private static AccessibilityNodeInfo ankreuzbar(AccessibilityNodeInfo n) {
+		if (n == null) return null;
+		if (n.isCheckable()) return n;
+		for (int i = 0; i < n.getChildCount(); i++) {
+			AccessibilityNodeInfo k = ankreuzbar(n.getChild(i));
+			if (k != null) return k;
+		}
+		return null;
 	}
 
 	private static boolean enthaelt(AccessibilityNodeInfo w, String text) {

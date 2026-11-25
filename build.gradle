@@ -13,5 +13,10 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // libadb-android (C: Geraet spricht selbst adb), nur diese Gruppe von JitPack
+        maven {
+            url 'https://jitpack.io'
+            content { includeGroupByRegex 'com\\.github\\.MuntashirAkon.*' }
+        }
     }
 }

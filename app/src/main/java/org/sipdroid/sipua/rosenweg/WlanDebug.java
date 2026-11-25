@@ -84,7 +84,7 @@ public class WlanDebug extends BroadcastReceiver {
 		prefs(c).edit().putLong("eingeschaltet_um", 0).apply();
 	}
 
-	private static android.content.SharedPreferences prefs(Context c) {
+	static android.content.SharedPreferences prefs(Context c) {
 		return c.getSharedPreferences("rosenweg_wlan_debug", Context.MODE_PRIVATE);
 	}
 
@@ -109,11 +109,17 @@ public class WlanDebug extends BroadcastReceiver {
 			prefs(c).edit().putLong("zentral_bis", bisSek).apply();
 			String f = einschalten(c, (bisSek - jetzt) * 1000L);
 			pruefenPlanen(c);
+			tcpPruefen(c, 10_000);
 			Log.i(TAG, "zentral an bis " + bisSek + (f == null ? "" : " - " + f));
 		} else if (war != 0) {
 			prefs(c).edit().remove("zentral_bis").apply();
 			ausschalten(c);
 		}
+	}
+
+	/** Zentral (Anlage) eingeschaltet und noch nicht abgelaufen? */
+	static boolean zentralAn(Context c) {
+		return prefs(c).getLong("zentral_bis", 0) > System.currentTimeMillis() / 1000;
 	}
 
 	/** Beim Abmelden: nur das in der Sitzung (Kachel) eingeschaltete Debugging aus. */
@@ -198,6 +204,7 @@ public class WlanDebug extends BroadcastReceiver {
 		} else {
 			portMelden(c);
 		}
+		tcpPruefen(c, 10_000);
 		pruefenPlanen(c);
 	}
 
@@ -237,6 +244,20 @@ public class WlanDebug extends BroadcastReceiver {
 		} catch (Exception e) {
 			Log.w(TAG, "beobachten: " + e.getClass().getSimpleName());
 		}
+	}
+
+	/**
+	 * C: adb laeuft (zentral an), Port 5555 ist aber zu (nach einem Neustart): Rosenweg Geraet
+	 * stellt ihn selbst wieder her (AdbSelbst). Im Hintergrund, nach kurzer Wartezeit.
+	 */
+	static void tcpPruefen(Context c, long warteMs) {
+		final Context app = c.getApplicationContext();
+		new Thread(() -> {
+			try { Thread.sleep(warteMs); } catch (InterruptedException e) { return; }
+			if (!zentralAn(app) || !an(app) || tcpOffen()) return;
+			String f = AdbSelbst.tcpWiederherstellen(app);
+			Log.i(TAG, "Port " + TCP_PORT + " war zu: " + (f == null ? "wiederhergestellt" : f));
+		}, "TcpPruefen").start();
 	}
 
 	// ─── Port per mDNS finden (adbd meldet "_adb-tls-connect._tcp") ──────────────────

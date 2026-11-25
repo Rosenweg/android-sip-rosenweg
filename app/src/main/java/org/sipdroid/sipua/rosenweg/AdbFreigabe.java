@@ -27,9 +27,24 @@ import android.util.Log;
 public class AdbFreigabe extends BroadcastReceiver {
 	static final String ABGLEICH = "ch.rosenweg4303.telefon.ADB_ABGLEICH";
 	static final String NEBENSTELLE = "ch.rosenweg4303.telefon.ADB_NEBENSTELLE";
+	/** C: eigenen adb-Schluessel einmal freigeben (Einrichtungsskript, Port 5555 offen). */
+	static final String SELBST_FREIGEBEN = "ch.rosenweg4303.telefon.ADB_SELBST_FREIGEBEN";
+	/** C zum Testen: Port 5555 jetzt selbst wiederherstellen. */
+	static final String SELBST_WIEDERHERSTELLEN = "ch.rosenweg4303.telefon.ADB_SELBST_WIEDERHERSTELLEN";
 
 	@Override
 	public void onReceive(Context c, Intent i) {
+		if (SELBST_FREIGEBEN.equals(i.getAction()) || SELBST_WIEDERHERSTELLEN.equals(i.getAction())) {
+			final boolean freigeben = SELBST_FREIGEBEN.equals(i.getAction());
+			final Context app = c.getApplicationContext();
+			// Kein goAsync: die Freigabe wartet bis 90 s auf die Rueckfrage, ein Empfaenger darf
+			// so lange nicht blockieren (sonst "reagiert nicht"). Ergebnis steht im Log.
+			new Thread(() -> {
+				String f = freigeben ? AdbSelbst.freigeben(app) : AdbSelbst.tcpWiederherstellen(app);
+				Log.i("RosenwegAdbSelbst", (freigeben ? "freigeben: " : "wiederherstellen: ") + (f == null ? "OK" : f));
+			}).start();
+			return;
+		}
 		if (NEBENSTELLE.equals(i.getAction())) {
 			String ext = i.getStringExtra("ext");
 			if (ext == null || !ext.matches("[0-9]{2,8}")) {

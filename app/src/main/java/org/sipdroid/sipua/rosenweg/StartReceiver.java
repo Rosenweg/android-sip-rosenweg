@@ -30,6 +30,8 @@ public class StartReceiver extends BroadcastReceiver {
 		Nachlauf.starten(c);   // nach Neustart/Update: offene Dateien der letzten Person fertig hochladen
 		if (!Sperre.istDeviceOwner(c)) return;
 		Katalog.vielleichtAbgleichen(c, true);
+		// C: nach dem Neustart Port 5555 selbst wiederherstellen (kein USB noetig)
+		if (Intent.ACTION_BOOT_COMPLETED.equals(a)) AdbSelbst.nachStart(c);
 		Sperre.grundregeln(c);
 		Sperrbild.setzen(c);
 		if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)

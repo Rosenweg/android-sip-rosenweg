@@ -197,6 +197,8 @@
                 <action android:name="ch.rosenweg4303.telefon.ADB_INSTALLATION" />
                 <action android:name="ch.rosenweg4303.telefon.ADB_ABGLEICH" />
                 <action android:name="ch.rosenweg4303.telefon.ADB_NEBENSTELLE" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_SELBST_FREIGEBEN" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_SELBST_WIEDERHERSTELLEN" />
             </intent-filter>
         </receiver>
         <service android:name=".rosenweg.KontoDienst" android:exported="false">
