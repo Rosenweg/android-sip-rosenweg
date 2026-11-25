@@ -128,6 +128,16 @@
         </receiver>
         <!-- Startbildschirm im gesperrten Zustand: Device Owner setzt ihn per
              addPersistentPreferredActivity als HOME; lockTaskMode erlaubt den Kiosk. -->
+        <!-- Telefon suchen: Vollbild mit "Gefunden" (auch ueber dem Sperrbildschirm) -->
+        <activity android:name=".rosenweg.SuchAktivitaet"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:lockTaskMode="if_whitelisted"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
         <activity android:name=".rosenweg.SperrActivity"
             android:label="Rosenweg Telefon"
             android:exported="true"

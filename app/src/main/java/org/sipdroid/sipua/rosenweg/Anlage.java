@@ -275,6 +275,11 @@ public final class Anlage {
 		merke(c, false, null);
 	}
 
+	/** POST /api/telefon/gefunden — Suchanruf mit "Gefunden" beantwortet (Geraetezugang). */
+	public static JSONObject gefunden(Context c) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/gefunden", "{}");
+	}
+
 	private static JSONObject anfrage(Context c, String methode, String pfad) throws Exception {
 		return anfrage(c, methode, pfad, "{}");
 	}

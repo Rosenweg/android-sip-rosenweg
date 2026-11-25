@@ -2,6 +2,7 @@ package org.sipdroid.sipua.rosenweg;
 
 import android.content.Context;
 import android.media.AudioManager;
+import android.os.Build;
 import android.util.Log;
 
 /**
@@ -14,6 +15,7 @@ public final class Suchen {
 	public static final String NUMMER = "2099";
 	private static final String TAG = "RosenwegSuchen";
 	private static int alterModus = -1, alteLautstaerke = -1, alterFilter = -1;
+	private static android.media.Ringtone klingel;
 
 	private Suchen() {}
 
@@ -37,12 +39,38 @@ public final class Suchen {
 			am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
 			am.setStreamVolume(AudioManager.STREAM_RING, am.getStreamMaxVolume(AudioManager.STREAM_RING), 0);
 			Log.i(TAG, "Suchanruf: Klingeln auf voller Lautstaerke");
+			// Eigener Klingelton (der Suchanruf geht nicht an die normale Anrufanzeige)
+			try {
+				if (klingel == null) {
+					klingel = android.media.RingtoneManager.getRingtone(c,
+							android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE));
+					if (klingel != null) {
+						klingel.setAudioAttributes(new android.media.AudioAttributes.Builder()
+								.setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build());
+						if (Build.VERSION.SDK_INT >= 28) klingel.setLooping(true);
+						klingel.play();
+					}
+				}
+			} catch (Exception e) {
+				Log.w(TAG, "Klingelton: " + e);
+			}
+			try {
+				c.startActivity(new android.content.Intent(c, SuchAktivitaet.class)
+						.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP));
+			} catch (Exception e) {
+				Log.w(TAG, "Suchfenster: " + e);
+			}
 		} catch (Exception e) {   // z.B. "Nicht stoeren" ohne Zugriff
 			Log.w(TAG, "laut: " + e);
 		}
 	}
 
 	public static synchronized void zurueck(Context c) {
+		if (klingel != null) {
+			try { klingel.stop(); } catch (Exception ignored) { }
+			klingel = null;
+		}
+		SuchAktivitaet.schliessen();
 		if (alterModus < 0 && alterFilter < 0) return;
 		try {
 			AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
@@ -58,5 +86,24 @@ public final class Suchen {
 		} finally {
 			alterModus = alteLautstaerke = alterFilter = -1;
 		}
+	}
+
+	/** Knopf "Gefunden": Klingeln aus, Anruf beenden, der Anlage melden (Geraetezugang, ohne Person). */
+	public static void gefunden(Context c) {
+		zurueck(c);
+		try {
+			org.sipdroid.sipua.ui.Receiver.engine(c).rejectcall();
+		} catch (Exception e) {
+			Log.w(TAG, "Anruf beenden: " + e);
+		}
+		final Context app = c.getApplicationContext();
+		new Thread(() -> {
+			try {
+				Anlage.gefunden(app);
+				Log.i(TAG, "Gefunden gemeldet");
+			} catch (Exception e) {
+				Log.w(TAG, "Gefunden melden: " + e);
+			}
+		}).start();
 	}
 }

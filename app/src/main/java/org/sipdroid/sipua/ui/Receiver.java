@@ -281,7 +281,12 @@ import org.zoolu.sip.provider.SipProvider;
 						text2 = text2.substring(text2.indexOf("\"")+1,text2.lastIndexOf("\""));
 					broadcastCallStateChanged("RINGING", caller);
 					// Rosenweg: Suchanruf der Anlage (2099) klingelt mit voller Lautstaerke
-					if (org.sipdroid.sipua.rosenweg.Suchen.istSuchanruf(text)) org.sipdroid.sipua.rosenweg.Suchen.laut(mContext);
+					if (org.sipdroid.sipua.rosenweg.Suchen.istSuchanruf(text)) {
+						// Suchanruf: eigenes Vollbild "Telefon gesucht" mit "Gefunden" statt der
+						// normalen Anrufanzeige (kein Annehmen/Ablehnen), laut auch bei stumm.
+						org.sipdroid.sipua.rosenweg.Suchen.laut(mContext);
+						break;
+					}
 					// Rosenweg: den Anzeigenamen nicht wegwerfen. Die Anlage setzt dort
 					// den Namen aus dem Rosenweg-Verzeichnis (CNAM); ohne ihn zeigte die
 					// Telefon-App nur die Nummer.
