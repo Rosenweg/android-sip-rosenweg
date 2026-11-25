@@ -22,7 +22,7 @@ import org.sipdroid.sipua.R;
 public final class Sperrbild {
 	private static final String TAG = "RosenwegSperrbild";
 	private static final String PREF = "rosenweg_sperrbild";
-	private static final int VERSION = 3;
+	private static final int VERSION = 4;
 	private static volatile String laeuft;
 	static final int BLAU = Color.parseColor("#1E3A8A");
 
@@ -81,6 +81,11 @@ public final class Sperrbild {
 	/** Logo aus dem Zwischenspeicher oder von der Website (nur www.rosenweg4303.ch). */
 	private static Bitmap laden(Context c, String datei) {
 		java.io.File f = new java.io.File(c.getFilesDir(), "sperrbild-" + datei);
+		// Zwischenspeicher: neue Fassung dieser Klasse (VERSION) oder aelter als 7 Tage ->
+		// neu laden (Logos auf der Website koennen sich aendern, z.B. Transparenz 25.11.2026)
+		boolean veraltet = prefs(c).getInt("version", 0) < VERSION
+				|| System.currentTimeMillis() - f.lastModified() > 7L * 24 * 3600 * 1000;
+		if (f.exists() && veraltet) f.delete();
 		if (!f.exists()) {
 			try {
 				java.net.HttpURLConnection v = (java.net.HttpURLConnection)
