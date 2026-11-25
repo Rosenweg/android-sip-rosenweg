@@ -427,6 +427,7 @@ public class SperrActivity extends Activity {
 		GradientDrawable g = new GradientDrawable();
 		g.setColor(Color.parseColor(farbe));
 		g.setCornerRadius(dp(14));
+		g.setStroke(Math.max(1, dp(1.2f)), Color.WHITE);   // feiner weisser Rand (Stefan 25.11.2026)
 		k.setBackground(g);
 		return k;
 	}
