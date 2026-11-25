@@ -146,6 +146,16 @@ public final class Anlage {
 		}
 		merke(c, s.optBoolean("angemeldet", false), s.optString("name", ""));
 		merkeNummer(c, s);
+		// Zuerst ueber die Einstellungs-Sperre entscheiden, vor WLAN/Wartung (die koennen beim
+		// Netzwechsel scheitern - dann blieb Technik gesperrt, Stefan 25.11.2026). Bei jedem
+		// Status, damit es sich selbst repariert.
+		if (s.optBoolean("angemeldet", false)) {
+			boolean technik = s.optBoolean("technik");
+			if (technik != prefs(c).getBoolean(Sperre.PREF_TECHNIK, false) || technik) {
+				prefs(c).edit().putBoolean(Sperre.PREF_TECHNIK, technik).apply();
+				Sperre.einstellungenSperren(c, !technik);
+			}
+		}
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
 		if (s.has("wlan_debug_bis")) WlanDebug.zentral(c, s.optLong("wlan_debug_bis", 0));
