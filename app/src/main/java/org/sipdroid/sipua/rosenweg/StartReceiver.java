@@ -31,6 +31,7 @@ public class StartReceiver extends BroadcastReceiver {
 		if (!Sperre.istDeviceOwner(c)) return;
 		Katalog.vielleichtAbgleichen(c, true);
 		Sperre.grundregeln(c);
+		Sperrbild.setzen(c);
 		if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
 				&& !Bildschirmsperre.abmeldungAusstehend(c)) {
 			// Update der Geraete-App waehrend jemand angemeldet ist: nicht abmelden,

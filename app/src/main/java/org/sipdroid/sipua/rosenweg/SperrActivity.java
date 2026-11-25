@@ -13,6 +13,7 @@ import android.hardware.Camera;
 import android.nfc.NfcAdapter;
 import android.os.Build;
 import android.os.Bundle;
+import org.sipdroid.sipua.R;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -90,6 +91,7 @@ public class SperrActivity extends Activity {
 	private boolean kameraAn;
 	private View kameraRahmen;
 	private TextView kartenHinweis;
+	private View logo;
 	private Button qrKnopf, wechselKnopf;
 	private final Runnable kameraZeitAus = this::kameraStoppen;
 	private static final long KAMERA_MS = 60_000;
@@ -228,6 +230,7 @@ public class SperrActivity extends Activity {
 		kameraAn = an;
 		if (kameraRahmen != null) kameraRahmen.setVisibility(an ? View.VISIBLE : View.GONE);
 		if (kartenHinweis != null) kartenHinweis.setVisibility(an ? View.GONE : View.VISIBLE);
+		if (logo != null) logo.setVisibility(an ? View.GONE : View.VISIBLE);
 		if (wechselKnopf != null) wechselKnopf.setVisibility(an ? View.VISIBLE : View.GONE);
 		if (qrKnopf != null) qrKnopf.setText(an ? "Kamera aus" : "QR-Code scannen");
 	}
@@ -429,16 +432,14 @@ public class SperrActivity extends Activity {
 	}
 
 	private View baueOberflaeche() {
-		int hell = Color.parseColor("#E5E7EB"), grau = Color.parseColor("#94A3B8");
+		// Wie der Ladebildschirm der Stationen: blauer Hintergrund, Rosenweg-Logo in der Mitte
+		// (Stefan 25.11.2026); beim QR-Scannen steht dort das Kamerabild.
+		int hell = Color.WHITE, grau = Color.parseColor("#BFDBFE");
 		LinearLayout l = new LinearLayout(this);
 		l.setOrientation(LinearLayout.VERTICAL);
 		l.setGravity(Gravity.CENTER_HORIZONTAL);
-		l.setBackgroundColor(Color.parseColor("#0F172A"));
+		l.setBackgroundColor(Color.parseColor("#1E3A8A"));
 		l.setPadding(dp(24), dp(40), dp(24), dp(24));
-
-		TextView titel = text(26, hell, true);
-		titel.setText("Rosenweg");
-		l.addView(titel);
 
 		TextView unter = text(15, grau, false);
 		unter.setText("Gesperrt · zum Benutzen anmelden");
@@ -462,12 +463,22 @@ public class SperrActivity extends Activity {
 		l.addView(rahmen, new LinearLayout.LayoutParams(dp(280), dp(280)));
 		kameraRahmen = rahmen;
 
-		kartenHinweis = text(24, hell, true);
+		View oben = new View(this);
+		l.addView(oben, new LinearLayout.LayoutParams(1, 0, 1f));
+		android.widget.ImageView bild = new android.widget.ImageView(this);
+		bild.setImageResource(R.drawable.rosenweg_logo);
+		bild.setAdjustViewBounds(true);
+		bild.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+		bild.setContentDescription("Rosenweg");
+		l.addView(bild, new LinearLayout.LayoutParams(dp(230), dp(230)));
+		logo = bild;
+
+		kartenHinweis = text(20, hell, true);
 		kartenHinweis.setText("Rosenweg-Karte\nhinten ans Telefon halten");
-		kartenHinweis.setPadding(0, dp(60), 0, dp(60));
+		kartenHinweis.setPadding(0, dp(20), 0, 0);
 		l.addView(kartenHinweis);
 
-		TextView hinweis = text(16, hell, false);
+		TextView hinweis = text(14, grau, false);
 		hinweis.setText("Oder: „QR-Code scannen“ und den Anmelde-QR von\npbx.rosenweg4303.ch/telefon auf deinem Handy zeigen,\noder unten mit dem Rosenweg-Konto anmelden.");
 		hinweis.setPadding(0, dp(18), 0, 0);
 		l.addView(hinweis);
@@ -481,19 +492,20 @@ public class SperrActivity extends Activity {
 		l.addView(platz, new LinearLayout.LayoutParams(1, 0, 1f));
 
 		Button konto = knopf("Mit Rosenweg-Konto anmelden", "#2563EB");
+		konto.setTextColor(Color.WHITE);
 		konto.setOnClickListener(v -> startActivity(new Intent(this, WebAppActivity.class)
 				.putExtra(WebAppActivity.EXTRA_ANMELDEN, true)));
 		LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
 		kp.bottomMargin = dp(10);
 		l.addView(konto, kp);
 
-		qrKnopf = knopf("QR-Code scannen", "#334155");
+		qrKnopf = knopf("QR-Code scannen", "#1E40AF");
 		qrKnopf.setOnClickListener(v -> { if (kameraAn) kameraStoppen(); else kameraOeffnen(); });
 		LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
 		qp.bottomMargin = dp(10);
 		l.addView(qrKnopf, qp);
 
-		wechselKnopf = knopf("Kamera wechseln", "#334155");
+		wechselKnopf = knopf("Kamera wechseln", "#1E40AF");
 		wechselKnopf.setOnClickListener(v -> {
 			frontkamera = !frontkamera;
 			kameraStarten();
