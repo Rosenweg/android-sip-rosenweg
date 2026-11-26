@@ -56,7 +56,20 @@ public final class Anlage {
 
 	/** Zuletzt bekannter Anmeldestand (fuer UI und Kontoname, ohne Netz). */
 	public static boolean angemeldet(Context c) {
+		// Nach einem Neustart ist die Sitzung sofort zu Ende, noch bevor lokal aufgeraeumt ist
+		if (Neustart.offen(c)) return false;
 		return prefs(c).getBoolean(PREF_ANGEMELDET, false);
+	}
+
+	/**
+	 * Nach einem Neustart zuerst an der Anlage abmelden (vorgemerkt in Bildschirmsperre).
+	 * Solange das nicht geklappt hat, gibt es weder Status noch neue Anmeldung: die alte
+	 * Sitzung darf nie zurueckkommen (Stefan 27.11.2026).
+	 */
+	private static void nachNeustartAbmelden(Context c) throws Exception {
+		if (Bildschirmsperre.abmeldungAusstehend(c) && !Bildschirmsperre.abmeldungAusfuehren(c)) {
+			throw new Exception("Abmeldung nach dem Neustart noch offen – Telefonanlage nicht erreichbar");
+		}
 	}
 
 	public static String name(Context c) {
@@ -93,6 +106,7 @@ public final class Anlage {
 
 	/** POST /api/telefon/einloesen {token} — gescannten Anmelde-QR einloesen. */
 	public static JSONObject einloesen(Context c, String qrInhalt) throws Exception {
+		nachNeustartAbmelden(c);
 		JSONObject k = new JSONObject();
 		k.put("token", qrInhalt);
 		JSONObject r = anfrage(c, "POST", "/api/telefon/einloesen", k.toString());
@@ -106,6 +120,7 @@ public final class Anlage {
 	 * einloesen; Fehlertexte der Anlage: "Karte nicht bekannt", "Karte gesperrt", ...
 	 */
 	public static JSONObject karte(Context c, String uid) throws Exception {
+		nachNeustartAbmelden(c);
 		JSONObject r = anfrage(c, "POST", "/api/telefon/karte", new JSONObject().put("uid", uid).toString(), 20000);
 		merke(c, r.optBoolean("angemeldet", false), r.optString("name", ""));
 		merkeNummer(c, r);
@@ -140,6 +155,7 @@ public final class Anlage {
 
 	/** GET /api/telefon/status -> {angemeldet, name, email, seit, apps}; merkt sich das Ergebnis. */
 	public static JSONObject status(Context c) throws Exception {
+		nachNeustartAbmelden(c);
 		JSONObject s = anfrage(c, "GET", "/api/telefon/status");
 		if (!s.optString("geraet", "").isEmpty()) {
 			prefs(c).edit().putString(PREF_GERAET, s.optString("geraet")).apply();
@@ -351,6 +367,9 @@ public final class Anlage {
 			v.setRequestProperty("Accept", "application/json");
 			v.setRequestProperty("Authorization", "Basic "
 					+ Base64.encodeToString(zugang.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
+			// Boot-Zaehler: meldet das Geraet einen neuen Boot, beendet die Anlage die Sitzung selbst
+			int boot = Neustart.bootZahl(c);
+			if (boot >= 0) v.setRequestProperty("X-Rosenweg-Boot", String.valueOf(boot));
 			if ("POST".equals(methode) || "PUT".equals(methode)) {
 				v.setDoOutput(true);
 				v.setRequestProperty("Content-Type", "application/json");

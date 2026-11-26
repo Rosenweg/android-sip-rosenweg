@@ -30,6 +30,9 @@ public class SipdroidApp extends Application implements SharedPreferences.OnShar
         // Rosenweg: "Debugging ueber WLAN" sofort wieder einschalten, wenn Android es beim
         // WLAN-Wechsel (auch 2,4 -> 5 GHz am selben Zugangspunkt) abstellt
         org.sipdroid.sipua.rosenweg.WlanDebug.beobachten(this);
+        // Rosenweg: beim Herunterfahren sperren, damit nach dem Neustart sofort der
+        // Sperrbildschirm statt des Launchers der Person kommt (jede Sitzung endet beim Neustart)
+        org.sipdroid.sipua.rosenweg.Neustart.beobachten(this);
         // Rosenweg: vor dem ersten Entsperren nach einem Neustart laeuft nur
         // BootEntsperren (directBootAware); die normalen Einstellungen sind dann
         // noch verschluesselt und wuerden die App abstuerzen lassen.

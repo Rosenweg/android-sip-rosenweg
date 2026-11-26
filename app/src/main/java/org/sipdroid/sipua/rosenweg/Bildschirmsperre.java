@@ -98,8 +98,15 @@ public final class Bildschirmsperre {
 	 * die Sitzung der Person.
 	 */
 	public static void nachNeustart(Context c) {
-		if (!prefs(c).getBoolean(GESETZT, false)) return;
-		if (entfernen(c)) prefs(c).edit().putBoolean(ABMELDEN, true).commit();
+		// Seit v241 endet jede Sitzung beim Neustart (Stefan 27.11.2026), mit oder ohne PIN:
+		// die Abmeldung an der Anlage ist immer vorgemerkt.
+		abmeldungVormerken(c);
+		entfernen(c);
+	}
+
+	/** Abmeldung an der Anlage vormerken (Neustart); der Sperrbildschirm holt sie nach. */
+	static void abmeldungVormerken(Context c) {
+		if (!prefs(c).getBoolean(ABMELDEN, false)) prefs(c).edit().putBoolean(ABMELDEN, true).commit();
 	}
 
 	public static boolean abmeldungAusstehend(Context c) {
@@ -107,7 +114,7 @@ public final class Bildschirmsperre {
 	}
 
 	/** Vorgemerkte Abmeldung an der Anlage ausfuehren (Netz noetig). @return true wenn erledigt */
-	public static boolean abmeldungAusfuehren(Context c) {
+	public static synchronized boolean abmeldungAusfuehren(Context c) {
 		if (!abmeldungAusstehend(c)) return true;
 		try {
 			Anlage.abmelden(c);

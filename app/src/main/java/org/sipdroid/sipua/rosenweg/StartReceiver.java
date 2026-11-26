@@ -10,9 +10,9 @@ import android.util.Log;
 import org.json.JSONObject;
 
 /**
- * Nach dem Neustart: geteiltes Telefon zuerst sperren. Ob noch jemand
- * angemeldet ist, prueft danach die SperrActivity bei der Anlage — und gibt
- * dann sofort wieder frei. So ist ein Telefon ohne Netz nie offen.
+ * Nach dem Neustart: geteiltes Telefon sperren und die Sitzung beenden (Neustart,
+ * Stefan 27.11.2026: "Jede Sitzung endet direkt beim Neustart"). Die Abmeldung an der
+ * Anlage holt die SperrActivity nach; erst danach ist eine neue Anmeldung moeglich.
  *
  * Nach einem Update der Geraete-App (waehrend jemand angemeldet ist) wird nicht
  * gesperrt: sonst waeren nach jedem Katalog-Abgleich Sitzung und persoenliche
@@ -26,22 +26,26 @@ public class StartReceiver extends BroadcastReceiver {
 		// SIP-Engine starten: im Kiosk oeffnet niemand die Einstellungen, und
 		// PACKAGE_REPLACED (alter Sipdroid-Weg) erreicht Manifest-Empfaenger seit
 		// Android 8 nicht mehr — nach einem Update waere das Telefon sonst stumm.
+		// Neustart: jede Sitzung endet (Stefan 27.11.2026). Zuerst sperren, dann alles andere.
+		if (Intent.ACTION_BOOT_COMPLETED.equals(a)) Sperre.sperrenFrueh(c);
 		org.sipdroid.sipua.ui.Receiver.engine(c).register();
 		Nachlauf.starten(c);   // nach Neustart/Update: offene Dateien der letzten Person fertig hochladen
 		if (!Sperre.istDeviceOwner(c)) return;
+		// Neuer Boot (Boot-Zaehler, einmal je Boot): lokal abmelden wie per Knopf und sperren
+		boolean neustartGesperrt = Neustart.abschliessen(c);
 		Katalog.vielleichtAbgleichen(c, true);
 		// C: nach dem Neustart Port 5555 selbst wiederherstellen (kein USB noetig)
 		if (Intent.ACTION_BOOT_COMPLETED.equals(a)) AdbSelbst.nachStart(c);
 		Sperre.grundregeln(c);
 		Sperrbild.setzen(c);
-		if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
+		if (!neustartGesperrt && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
 				&& !Bildschirmsperre.abmeldungAusstehend(c)) {
 			// Update der Geraete-App waehrend jemand angemeldet ist: nicht abmelden,
 			// sondern die Anlage fragen und die Sitzung wiederherstellen.
 			sitzungBehalten(c.getApplicationContext(), goAsync());
 			return;
 		}
-		Sperre.sperren(c);
+		if (!neustartGesperrt) Sperre.sperren(c);
 	}
 
 	private static void sitzungBehalten(Context c, PendingResult fertig) {
