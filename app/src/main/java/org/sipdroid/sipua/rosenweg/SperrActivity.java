@@ -142,6 +142,8 @@ public class SperrActivity extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
+		// Neustart: Sitzung zuerst lokal beenden (sperren), bevor hier irgendetwas freigibt
+		Neustart.abschliessen(this);
 		// Einrichtung beim Anmelden laeuft (oder wartet auf "Nochmals versuchen"): sie gehoert der Bildschirm
 		if (anmeldungLaeuft) return;
 		// Zurueck aus dem Anmeldefenster und schon angemeldet: nicht wieder sperren.
@@ -745,8 +747,12 @@ public class SperrActivity extends Activity {
 						} catch (Exception e) {
 							letzter = ursache(e);
 						}
-						if (System.currentTimeMillis() > bis) return fehler("Telefonanlage nicht erreichbar (" + letzter + ")");
-						schritt(i, LAEUFT, "warte auf die Telefonanlage …");
+						// Nach einem Neustart ohne Zeitlimit warten: bis die Anlage die alte Sitzung beendet
+						// hat, ist keine neue Anmeldung moeglich (Notruf geht immer)
+						boolean neustart = Bildschirmsperre.abmeldungAusstehend(app);
+						if (!neustart && System.currentTimeMillis() > bis) return fehler("Telefonanlage nicht erreichbar (" + letzter + ")");
+						schritt(i, LAEUFT, neustart ? "Neustart: warte auf die Telefonanlage, um die letzte Sitzung zu beenden …"
+								: "warte auf die Telefonanlage …");
 						Thread.sleep(3000);
 					}
 				}),

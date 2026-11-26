@@ -220,6 +220,7 @@ public final class Sperre {
 			erlaubt[0] = c.getPackageName();
 			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
 			d.setLockTaskPackages(a, erlaubt);
+			keyguardRegeln(d, a);
 			telefonAppFestlegen(c, d, a);
 			fremdeRechte(c, d, a);    // Einrichtung ohne adb (Stefan 25.11.2026, "A")
 			browserFestlegen(c, d, a);
@@ -297,6 +298,56 @@ public final class Sperre {
 					.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES), "ch.rosenweg4303.permission.ANLAGE");
 		} catch (Exception e) {
 			Log.w(TAG, "SIP_PERSON_GEAENDERT: " + e);
+		}
+	}
+
+	/**
+	 * Sofort sperren, nur mit dem Device Owner (ohne die normalen, vor dem ersten Entsperren noch
+	 * verschluesselten Einstellungen): Sperrbildschirm als HOME, Statusleiste aus, Lock-Task-Liste,
+	 * Kamera/Benachrichtigungen auf dem Android-Sperrbildschirm aus. Beim Herunterfahren und bei
+	 * LOCKED_BOOT_COMPLETED (Neustart): Android startet danach den Sperrbildschirm statt den
+	 * Launcher der Person, und bis dahin ist nichts bedienbar. Den Rest macht sperren().
+	 */
+	static void sperrenFrueh(Context c) {
+		if (!istDeviceOwner(c)) return;
+		DevicePolicyManager d = dpm(c);
+		ComponentName a = admin(c);
+		try {
+			d.setStatusBarDisabled(a, true);
+			keyguardRegeln(d, a);
+			homeAlias(c, true);
+			d.clearPackagePersistentPreferredActivities(a, LAUNCHER_PAKET);
+			IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
+			home.addCategory(Intent.CATEGORY_HOME);
+			home.addCategory(Intent.CATEGORY_DEFAULT);
+			d.addPersistentPreferredActivity(a, home, homeKomponente(c));
+			String[] erlaubt = new String[ERLAUBT_GESPERRT.length + 1];
+			erlaubt[0] = c.getPackageName();
+			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
+			d.setLockTaskPackages(a, erlaubt);
+			if (Build.VERSION.SDK_INT >= 28) {
+				d.setLockTaskFeatures(a, DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+						| DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS);
+			}
+			Log.i(TAG, "frueh gesperrt (Sperrbildschirm als HOME, Statusleiste aus)");
+		} catch (Exception e) {
+			Log.e(TAG, "sperrenFrueh", e);
+		}
+	}
+
+	/**
+	 * Android-Sperrbildschirm (Keyguard, mit persoenlicher PIN): keine Kamera, keine
+	 * Benachrichtigungen, keine Verknuepfungen - sonst waere dort nach einem Neustart, bevor
+	 * die PIN weg ist, etwas bedienbar (Stefan 27.11.2026).
+	 */
+	static void keyguardRegeln(DevicePolicyManager d, ComponentName a) {
+		int aus = DevicePolicyManager.KEYGUARD_DISABLE_SECURE_CAMERA
+				| DevicePolicyManager.KEYGUARD_DISABLE_SECURE_NOTIFICATIONS;
+		if (Build.VERSION.SDK_INT >= 34) aus |= DevicePolicyManager.KEYGUARD_DISABLE_SHORTCUTS_ALL;
+		try {
+			if (d.getKeyguardDisabledFeatures(a) != aus) d.setKeyguardDisabledFeatures(a, aus);
+		} catch (Exception e) {
+			Log.w(TAG, "Keyguard: " + e);
 		}
 	}
 
