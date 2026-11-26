@@ -27,9 +27,8 @@ import android.widget.Toast;
  */
 public class NfcKarte extends Activity {
 	private static final String TAG = "RosenwegNfc";
-	/** Reader-Modus: alle Kartentypen, NDEF nicht pruefen (nur die UID zaehlt). */
-	public static final int LESER_FLAGS = NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B
-			| NfcAdapter.FLAG_READER_NFC_F | NfcAdapter.FLAG_READER_NFC_V | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK;
+	/** Reader-Modus: aus commons-rosenweg (anmeldeschirm), gleich wie der Anmeldeschirm der Apps. */
+	public static final int LESER_FLAGS = ch.rosenweg4303.anmeldeschirm.Kartenleser.FLAGS;
 
 	private static volatile boolean laeuft;
 	private static String zuletzt;
@@ -87,10 +86,7 @@ public class NfcKarte extends Activity {
 
 	/** UID der Karte als Hex in Grossbuchstaben, null ohne Karte. */
 	public static String uid(Tag tag) {
-		if (tag == null || tag.getId() == null || tag.getId().length == 0) return null;
-		StringBuilder hex = new StringBuilder();
-		for (byte x : tag.getId()) hex.append(String.format("%02X", x));
-		return hex.toString();
+		return ch.rosenweg4303.anmeldeschirm.Kartenleser.uid(tag);
 	}
 
 	/**

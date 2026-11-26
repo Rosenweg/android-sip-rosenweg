@@ -13,6 +13,10 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // commons-rosenweg (anmeldeschirm), wie die anderen Rosenweg-Apps
+        mavenLocal {
+            content { includeGroup 'ch.rosenweg4303' }
+        }
         // libadb-android (C: Geraet spricht selbst adb), nur diese Gruppe von JitPack
         maven {
             url 'https://jitpack.io'
