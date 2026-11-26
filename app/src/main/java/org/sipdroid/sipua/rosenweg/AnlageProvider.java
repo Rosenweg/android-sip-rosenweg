@@ -49,6 +49,16 @@ import java.util.TimeZone;
  *       Kartenverwaltung (App "Rosenweg Karten"): nur wenn die angemeldete Person Technik/
  *       Praesident ist (hier live geprueft, die Anlage prueft nochmals). Sonst
  *       {fehler: "nicht berechtigt", nicht_berechtigt: true}. Fehler der Anlage: {fehler, status}.
+ *   call("portal_anfrage", pfad, {methode, koerper, paket}) -> {status (int), json (Text), sitzung}
+ *       Anfrage einer Rosenweg-App (Flutter, rosenweg-basis GeraetTransport) an die Haupt-API
+ *       im Namen der angemeldeten Person. pfad "/api/...", methode GET|POST|PUT|DELETE,
+ *       koerper JSON-Text oder fehlt. Weg: hier -> PBX-API (POST /api/telefon/portal, Geraete-
+ *       zugang) -> Haupt-API mit einem Token fuer genau diese Anfrage, das die Anlage behaelt.
+ *       Die App sieht nie ein Token. Welche Pfade eine App so erreicht, legt die Anlage fest
+ *       (Config portal_pfade); hier: Signatur des Aufrufers, Methode, Pfadform, Groesse, Takt.
+ *       {nicht_angemeldet: true}: niemand am Telefon angemeldet. {fehler}: Netz/Anlage.
+ *       "sitzung" wechselt mit jeder An-/Abmeldung (die App laedt dann neu); paket nimmt
+ *       der Provider vom Aufrufer, nicht aus den extras.
  *
  * Blockiert (Netz): nicht vom UI-Thread aufrufen.
  */
@@ -126,6 +136,17 @@ public class AnlageProvider extends ContentProvider {
 		if (getContext().checkCallingPermission("ch.rosenweg4303.permission.ANLAGE") != PackageManager.PERMISSION_GRANTED) {
 			throw new SecurityException("Nur Rosenweg-Apps");
 		}
+		if (PORTAL.equals(method)) {
+			// Aufrufer jetzt bestimmen (im Netz-Thread kennt Android ihn nicht mehr)
+			String paket = portalAufrufer();
+			if (paket == null) throw new SecurityException("Nur Rosenweg-Apps mit derselben Signatur");
+			if (!Anlage.eingerichtet(getContext())) return fehler("Dieses Telefon ist noch nicht eingerichtet.");
+			try {
+				return NETZ.submit(() -> portalAnfrage(arg, extras, paket)).get(25, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (Exception e) {
+				return fehler("Das Portal antwortet nicht (Zeitüberschreitung).");
+			}
+		}
 		if (arg == null || arg.isEmpty() || !Anlage.eingerichtet(getContext())) return new Bundle();
 		// Eigener Thread: ruft eine App vom Haupt-Thread, gaebe Android dessen StrictMode
 		// ueber Binder mit (NetworkOnMainThreadException hier im Provider).
@@ -141,6 +162,114 @@ public class AnlageProvider extends ContentProvider {
 	}
 
 	private static final java.util.concurrent.ExecutorService NETZ = java.util.concurrent.Executors.newCachedThreadPool();
+
+	// ─── portal_anfrage (siehe Kopf) ────────────────────────────────────────
+	static final String PORTAL = "portal_anfrage";
+	static final int PORTAL_KOERPER_MAX = 256 * 1024;
+	/** Binder-Grenze ~1 MB je Transaktion; die Anlage begrenzt ebenso. */
+	static final int PORTAL_ANTWORT_MAX = 512 * 1024;
+	/** Hoechstens so viele Anfragen je App und Minute (eine haengende Schleife legt sonst die Anlage lahm). */
+	static final int PORTAL_TAKT_MINUTE = 120;
+	private static final java.util.regex.Pattern PORTAL_PFAD = java.util.regex.Pattern.compile(
+			"/api/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,1000}(\\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,1000})?");
+	private static final java.util.regex.Pattern PORTAL_KODIERT_VERBOTEN =
+			java.util.regex.Pattern.compile("%(2e|2f|5c|00)", java.util.regex.Pattern.CASE_INSENSITIVE);
+	private static final java.util.Map<String, long[]> PORTAL_TAKT = new java.util.HashMap<>();
+
+	/**
+	 * Paket des Aufrufers, wenn er eine Rosenweg-App mit derselben Signatur ist, sonst null.
+	 * checkCallingPermission (ANLAGE, signature) hat call() schon geprueft; hier zusaetzlich
+	 * die Signatur der UID direkt (falls die Berechtigung je anders vergeben wuerde).
+	 */
+	private String portalAufrufer() {
+		String paket = getCallingPackage();
+		if (paket == null || !paket.startsWith("ch.rosenweg4303.")) return null;
+		PackageManager pm = getContext().getPackageManager();
+		int uid = android.os.Binder.getCallingUid();
+		if (pm.checkSignatures(android.os.Process.myUid(), uid) != PackageManager.SIGNATURE_MATCH) return null;
+		String[] pakete = pm.getPackagesForUid(uid);
+		return pakete != null && java.util.Arrays.asList(pakete).contains(paket) ? paket : null;
+	}
+
+	static boolean portalPfadOk(String pfad) {
+		if (pfad == null || !PORTAL_PFAD.matcher(pfad).matches()) return false;
+		String weg = pfad.split("\\?", 2)[0];
+		if (weg.contains("//") || PORTAL_KODIERT_VERBOTEN.matcher(pfad).find()) return false;
+		for (String teil : weg.split("/")) if (".".equals(teil) || "..".equals(teil)) return false;
+		return true;
+	}
+
+	private static synchronized boolean portalTaktOk(String paket) {
+		long jetzt = System.currentTimeMillis();
+		long[] t = PORTAL_TAKT.get(paket);   // {Beginn der Minute, Anzahl}
+		if (t == null || jetzt - t[0] > 60_000) {
+			PORTAL_TAKT.put(paket, new long[]{jetzt, 1});
+			return true;
+		}
+		return ++t[1] <= PORTAL_TAKT_MINUTE;
+	}
+
+	private static Bundle fehler(String text) {
+		Bundle b = new Bundle();
+		b.putString("fehler", text);
+		return b;
+	}
+
+	private static Bundle antwort(int status, String json, String sitzung) {
+		Bundle b = new Bundle();
+		b.putInt("status", status);
+		b.putString("json", json == null ? "" : json);
+		if (sitzung != null && !sitzung.isEmpty()) b.putString("sitzung", sitzung);
+		return b;
+	}
+
+	private Bundle portalAnfrage(String pfad, Bundle extras, String paket) {
+		android.content.Context c = getContext();
+		String methode = extras == null ? "GET" : extras.getString("methode", "GET");
+		String koerper = extras == null ? null : extras.getString("koerper");
+		if (!("GET".equals(methode) || "POST".equals(methode) || "PUT".equals(methode) || "DELETE".equals(methode))) {
+			return fehler("Methode nicht erlaubt: " + methode);
+		}
+		if (!portalPfadOk(pfad)) return fehler("Ungültiger Pfad für das Portal.");
+		if (koerper != null && koerper.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > PORTAL_KOERPER_MAX) {
+			return fehler("Die Anfrage ist zu gross für das Telefon.");
+		}
+		if (!portalTaktOk(paket)) return antwort(429, "", null);
+		Bundle b = new Bundle();
+		if (!Anlage.angemeldet(c)) {
+			b.putBoolean("nicht_angemeldet", true);
+			return b;
+		}
+		try {
+			JSONObject r = Anlage.portal(c, methode, pfad, koerper, paket);
+			String json = r.optString("json", "");
+			if (json.length() > PORTAL_ANTWORT_MAX) return fehler("Die Antwort ist zu gross für das Telefon.");
+			return antwort(r.optInt("status", 502), json, r.optString("sitzung", ""));
+		} catch (Anlage.AnlageFehler e) {
+			switch (e.status) {
+				case 409:
+					b.putBoolean("nicht_angemeldet", true);
+					return b;
+				case 403:   // Pfad fuer diese App auf geteilten Telefonen nicht freigegeben
+				case 400:
+				case 413:
+					try {
+						return antwort(e.status, new JSONObject().put("error", e.getMessage()).toString(), null);
+					} catch (Exception ignored) {
+						return fehler(String.valueOf(e.getMessage()));
+					}
+				case 401:
+					return fehler("Dieses Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben.");
+				default:
+					Log.w(TAG, "portal " + paket + " " + methode + ": Anlage " + e.status);
+					return fehler(e.getMessage() != null && !e.getMessage().startsWith("HTTP ")
+							? e.getMessage() : "Die Telefonanlage antwortet nicht (" + e.status + ").");
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "portal " + paket + " " + methode + ": " + e.getClass().getSimpleName());
+			return fehler("Keine Verbindung zur Telefonanlage.");
+		}
+	}
 
 	private Bundle ausfuehren(String method, String arg, Bundle extras, String aufrufer) {
 		Bundle b = new Bundle();
