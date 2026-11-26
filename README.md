@@ -1,44 +1,26 @@
-# Rosenweg Gerät
+<p align="center"><img src="assets/logo/rosenweg-geraet-512.png" width="96" alt="Logo"></p>
+<h1 align="center">Rosenweg Gerät</h1>
+<p align="center">Geräteverwaltung der geteilten Rosenweg-Smartphones: Anmelden per Karte, Rosenweg-Apps, Zugänge der Person – und die Nebenstelle an der Telefonanlage.</p>
+<p align="center"><a href="https://www.rosenweg4303.ch/smartphones">Geteilte Telefone</a> · <a href="docs/anleitung.md">Anleitung</a> · <a href="docs/entwickeln.md">Für Entwickler</a></p>
 
-Geräteverwaltung (Device Owner) der geteilten Smartphones der Siedlung Rosenweg in Kaiseraugst. Rosenweg Gerät sperrt das Telefon, bis sich eine Person anmeldet, installiert die Rosenweg-Apps aus dem Katalog der Telefonanlage und gibt den Apps die Zugänge der angemeldeten Person. Gleichzeitig ist es die SIP-Nebenstelle des Telefons an der Rosenweg-Telefonanlage. Grundlage ist Android SIP, eine modernisierte Fassung von Sipdroid.
+## Was die App kann
 
-## Im Rosenweg
+- Sperrt das Telefon, bis sich jemand anmeldet – per NFC-Karte, QR-Code oder Rosenweg-Konto.
+- Beim Abmelden werden persönliche Daten gelöscht, erst nachdem alles hochgeladen ist.
+- Installiert und aktualisiert die Rosenweg-Apps aus dem Katalog der Telefonanlage.
+- Gibt den Apps die Zugänge der angemeldeten Person (Nextcloud, Telefonnummer, Messenger).
+- Nebenstelle des Telefons, Telefonbuch der Siedlung, „Telefon suchen“.
 
-- **Anmelden und Abmelden:** Sperrbildschirm mit Anmeldung per NFC-Karte (UniFi Access), QR-Code oder Rosenweg-Konto; persönliche PIN als Bildschirmsperre. Beim Abmelden werden die Daten persönlicher Apps und Web-Sitzungen gelöscht; abgemeldet wird erst, wenn alle Apps ihre Dateien hochgeladen haben.
-- **App-Katalog:** Installiert die freigegebenen Apps still von der Telefonanlage (Prüfsumme kontrolliert), blendet sie ohne Anmeldung aus und entfernt Apps, die aus dem Katalog verschwinden. Andere Installationen sind gesperrt.
-- **Zugänge für die Rosenweg-Apps:** Nextcloud-Zugang, persönliche Telefonnummer (Rosenweg Telefon), Messenger-Zugang (Rosenweg Messenger) sowie Einstellungen und Startseite pro Person, alles über einen nur für Rosenweg-signierte Apps zugänglichen Provider.
-- **Telefon:** Nebenstelle des Geräts, Telefonbuch der Siedlung als eigenes Konto im Android-Adressbuch, "Telefon suchen" (klingelt laut, auch stumm oder bei "Nicht stören").
-- **Sperrbild und Startansicht:** Rosenweg-Logo bzw. Logo der Gruppe oder des Hauses der angemeldeten Person; Startansicht mit Kacheln für die Rosenweg-Web-Apps und die installierten Apps.
-- **WLAN und Wartung:** richtet das Rosenweg-WLAN mit persönlichem Schlüssel ein; Wartung über adb, zentral von der Anlage aus einschaltbar.
-- **Karten:** Schnittstelle für [Rosenweg Karten](https://github.com/Rosenweg/rosenweg-karten) (NFC-Karten nachschlagen, zuordnen, entziehen).
-- **An- und Abmelden Schritt für Schritt:** eigener Bildschirm mit den Schritten (Anlage, WLAN, Apps und Rechte, Telefonkonto, Nextcloud, PIN, Startseite) und ihrem Stand; bei einem Fehler hält er an (Nochmals versuchen / Abbrechen).
-- **Portal-Anfragen für die Flutter-Apps** (ab v236): `portal_anfrage` im Provider schickt Anfragen an die Rosenweg-API im Namen der angemeldeten Person über die Telefonanlage; die App selbst bekommt kein Token. Nur für Rosenweg-signierte Apps, mit Grössen- und Mengengrenzen.
-- **adb-Updater der Anlage** (ab v237): Die Telefonanlage kann neue App-Versionen selbst per adb einspielen. Ihr adb-Schlüssel wird je Telefon einmal zugelassen (nur genau dieser Fingerabdruck); nach der Installation ist das Installationsverbot sofort wieder gesetzt.
-- **Logo:** Rosenweg-Wappen (Turm, Weg, Rose auf Rot) mit dem Zeichen der App rechts unten, erzeugt mit dem Logo-Baukasten aus rosenweg-basis; dazu ein monochromes Designsymbol (Android 13+).
+## Plattformen
 
-Mehr zur Nutzung der geteilten Telefone: [www.rosenweg4303.ch/smartphones](https://www.rosenweg4303.ch/smartphones).
+Android, nur auf den geteilten Rosenweg-Telefonen (Device Owner, Einrichtung durch die Technik).
 
-## Installation
+## Entwickeln
 
-Rosenweg Gerät wird nur auf den geteilten Rosenweg-Telefonen eingerichtet, und zwar als Device Owner (auf einem frisch zurückgesetzten Telefon). Das macht die Technik. Für ein eigenes Handy ist die App nicht gedacht; dort genügen die einzelnen Rosenweg-Apps von [www.rosenweg4303.ch/apps](https://www.rosenweg4303.ch/apps).
-
-## Bauen
-
-```bash
-# Zweig rosenweg
-./gradlew assembleRelease
-```
-
-Braucht das Android NDK (native Codecs über `ndkBuild`). Signiert wird mit `keystore.properties` (nicht im Repo). Der Schlüssel muss derselbe sein wie bei den übrigen Rosenweg-Apps, weil diese nur Rosenweg-signierten Apps Zugang geben. Paketname: `ch.rosenweg4303.telefon`.
-
-Logo neu erzeugen (aus dem Repo-Wurzelverzeichnis, rosenweg-basis daneben): `sh assets/logo/erzeugen.sh`. Welches Zeichen die App trägt, steht in rosenweg-basis `werkzeug/logo/android-apps.txt`.
-
-## Neue Version
-
-APK wie oben bauen und signieren, dann `gh release create v<versionName> <datei.apk> --notes "Was ist neu"` (Tag = versionName der APK, eine APK je Release). Der Workflow `.github/workflows/apps.yml` (wiederverwendbarer Workflow `apps-release.yml` aus Rosenweg/Website) schickt sie an den App-Katalog der Telefonanlage, von dort kommt sie auf die geteilten Telefone (Rosenweg Gerät steht nicht auf www.rosenweg4303.ch/apps). Anmeldung per GitHub-OIDC, kein gespeichertes Geheimnis; die Anlage prüft Tag, Prüfsumme, Rosenweg-Signatur und Paketnamen. Der Workflow liegt im Standardzweig `master`; `gh release create` ohne `--target` setzt den Tag dort hin. Erneut senden: `gh workflow run apps.yml --ref <tag>`.
+Android-App (Java, Gradle, NDK für die Codecs).
+Bau, Schnittstellen, Signatur und Veröffentlichung stehen in [docs/entwickeln.md](docs/entwickeln.md).
 
 ## Herkunft und Lizenz
 
-Fork von [Android SIP](https://github.com/hell3lazer/Android-SIP), einer modernisierten Fassung von [Sipdroid](https://github.com/i-p-tel/sipdroid). Der Zweig `master` folgt dem Original, die Rosenweg-Anpassungen liegen im Zweig `rosenweg`. Herzlichen Dank an die Sipdroid-Entwickler (Sipdroid Open Source Project, Hughes Systique, mjsip/Luca Veltri, Android Open Source Project) und an den Autor von Android SIP.
-
-Lizenz: GNU General Public License v3.0, siehe [LICENSE.TXT](LICENSE.TXT), mit den zusätzlichen Bedingungen von Sipdroid in [ADDITIONAL_TERMS.txt](ADDITIONAL_TERMS.txt). Der Info-Dialog mit den Sipdroid-Hinweisen bleibt deshalb unverändert; die Rosenweg-Angaben stehen an seinem Ende.
+Basiert auf [Android SIP](https://github.com/hell3lazer/Android-SIP), einer modernisierten Fassung von [Sipdroid](https://github.com/i-p-tel/sipdroid) – herzlichen Dank an die Sipdroid-Entwickler und den Autor von Android SIP.
+GPL-3.0, siehe [LICENSE.TXT](LICENSE.TXT), mit den zusätzlichen Bedingungen von Sipdroid in [ADDITIONAL_TERMS.txt](ADDITIONAL_TERMS.txt).
