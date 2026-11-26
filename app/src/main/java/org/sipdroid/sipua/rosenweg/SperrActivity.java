@@ -146,20 +146,9 @@ public class SperrActivity extends Activity {
 		if (anmeldungLaeuft) return;
 		// Zurueck aus dem Anmeldefenster und schon angemeldet: nicht wieder sperren.
 		if (!netzWartet && Anlage.angemeldet(this)) {
-			// Nach einem Neustart: Kiosk halten, bis die Sitzung wiederhergestellt und die PIN gesetzt ist
-			if (Bildschirmsperre.neustartOffen(this) && Sperre.istDeviceOwner(this) && !imLockTask()) {
-				try {
-					startLockTask();
-				} catch (Exception e) {
-					Log.w(TAG, "startLockTask: " + e.getMessage());
-				}
-			}
 			entsperrt(Anlage.name(this), null);
 			return;
 		}
-		// Niemand angemeldet: nach dem Neustart gibt es nichts wiederherzustellen (eine neue Anmeldung
-		// per Karte/QR ist eine gewoehnliche Anmeldung)
-		if (!Anlage.angemeldet(this)) Bildschirmsperre.neustartErledigt(this);
 		Sperre.grundregeln(this);
 		if (Sperre.istDeviceOwner(this) && !imLockTask()) {
 			try {
@@ -184,12 +173,6 @@ public class SperrActivity extends Activity {
 	private volatile boolean netzWartet;
 	/** Einrichtung beim Anmelden laeuft oder steht bei einem Fehler. */
 	private volatile boolean anmeldungLaeuft;
-	/**
-	 * Diese Einrichtung stellt eine Sitzung nach einem Neustart wieder her (Bildschirmsperre.neustartOffen):
-	 * PIN ist Pflicht, kein "Abbrechen" (sonst meldete jeder, der das Telefon gerade hat, die Person ab),
-	 * am Ende sperrt der Bildschirm mit der PIN der Person.
-	 */
-	private volatile boolean wiederherstellen;
 
 	@Override
 	protected void onPause() {
@@ -508,29 +491,21 @@ public class SperrActivity extends Activity {
 						schritt(i, LAEUFT, "neu verbunden, warte auf das Netz …");
 						Thread.sleep(4000);
 					}
-					// Nach einem Neustart braucht das WLAN laenger; ohne Anlage wird nichts wiederhergestellt
-					int warteS = wiederherstellen ? 180 : 45;
-					long bis = System.currentTimeMillis() + warteS * 1000L;
+					long bis = System.currentTimeMillis() + 45_000;
 					String letzter;
 					while (true) {
 						try {
 							JSONObject st = Anlage.status(app);
-							if (!st.optBoolean("angemeldet", false)) {
-								if (wiederherstellen) return sitzungWeg("die Anlage kennt die Sitzung nicht mehr – aufräumen");
-								return fehler("die Telefonanlage kennt die Anmeldung nicht (mehr)");
-							}
+							if (!st.optBoolean("angemeldet", false)) return fehler("die Telefonanlage kennt die Anmeldung nicht (mehr)");
 							stand[0] = st;
 							return ok(neu ? "neu verbunden" : null);
 						} catch (Anlage.AnlageFehler e) {
-							if (e.status == 401) {
-								if (wiederherstellen) return sitzungWeg("Telefon an der Anlage nicht mehr freigegeben – aufräumen");
-								return fehler("Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben");
-							}
+							if (e.status == 401) return fehler("Telefon ist an der Anlage nicht als geteiltes Telefon freigegeben");
 							letzter = e.getMessage();
 						} catch (Exception e) {
 							letzter = ursache(e);
 						}
-						if (System.currentTimeMillis() > bis) return fehler("Telefonanlage nach " + warteS + " s nicht erreichbar (" + letzter + ")");
+						if (System.currentTimeMillis() > bis) return fehler("Telefonanlage nach 45 s nicht erreichbar (" + letzter + ")");
 						schritt(i, LAEUFT, "warte auf das WLAN …");
 						Thread.sleep(3000);
 					}
@@ -597,7 +572,7 @@ public class SperrActivity extends Activity {
 					JSONObject k = Anlage.nextcloudKonto(app);
 					return k != null && k.length() > 0 ? ok(null) : warnung("kein Zugang erhalten");
 				}),
-				new Schritt(ANMELDE_SCHRITTE[6], wiederherstellen, this::pinSchritt),
+				new Schritt(ANMELDE_SCHRITTE[6], false, this::pinSchritt),
 				new Schritt(ANMELDE_SCHRITTE[7], true, i -> startseitePruefen(app, "anmelden")),
 		};
 	}
@@ -609,13 +584,11 @@ public class SperrActivity extends Activity {
 	private Ergebnis pinSchritt(int i) throws Exception {
 		Context app = getApplicationContext();
 		Bildschirmsperre.vorbereiten(app);
+		if (Bildschirmsperre.abmeldungAusstehend(app)) return warnung("Abmeldung nach Neustart ausstehend – PIN folgt später");
 		JSONObject p = Anlage.pin(app);
 		String pin;
 		if (p.optBoolean("gesetzt")) {
 			pin = p.optString("pin");
-		} else if (wiederherstellen) {
-			// Nach dem Neustart nicht nach einer neuen PIN fragen: die Person ist evtl. gar nicht da
-			return warnung("keine persönliche PIN – das Telefon ist danach ohne Sperre");
 		} else {
 			String fehlerText = null;
 			while (true) {
@@ -631,16 +604,10 @@ public class SperrActivity extends Activity {
 				}
 			}
 		}
-		// Nach einem Neustart Pflicht (Schritt.pflicht): ohne PIN-Sperre nicht in die Sitzung
-		if (!Anlage.angemeldet(app)) return wiederherstellen ? fehler("nicht mehr angemeldet") : warnung("nicht mehr angemeldet");
-		if (!Bildschirmsperre.bereit(app)) {
-			return wiederherstellen ? fehler("Bildschirmsperre auf diesem Telefon nicht bereit") : warnung("Bildschirmsperre auf diesem Telefon nicht bereit");
-		}
-		if (!Bildschirmsperre.setzen(app, pin)) {
-			return wiederherstellen ? fehler("PIN konnte auf diesem Telefon nicht gesetzt werden") : warnung("PIN konnte auf diesem Telefon nicht gesetzt werden");
-		}
-		if (geraetGesichert(app)) return ok("PIN aktiv");
-		return wiederherstellen ? fehler("PIN gesetzt, das Telefon meldet aber keine Sperre") : warnung("PIN gesetzt, das Telefon meldet aber keine Sperre");
+		if (!Anlage.angemeldet(app)) return warnung("nicht mehr angemeldet");
+		if (!Bildschirmsperre.bereit(app)) return warnung("Bildschirmsperre auf diesem Telefon nicht bereit");
+		if (!Bildschirmsperre.setzen(app, pin)) return warnung("PIN konnte auf diesem Telefon nicht gesetzt werden");
+		return geraetGesichert(app) ? ok("PIN aktiv") : warnung("PIN gesetzt, das Telefon meldet aber keine Sperre");
 	}
 
 	/**
@@ -700,38 +667,17 @@ public class SperrActivity extends Activity {
 
 	/** Abbrechen beim Anmelden: Sitzung an der Anlage beenden, aufraeumen, Abmelde-Pruefung zeigen. */
 	private void anmeldungAbbrechen() {
-		kopfText.setText("Abbrechen …");
-		aufraeumen(true);
-	}
-
-	/**
-	 * Wiederherstellung nach einem Neustart: die Anlage kennt die Sitzung nicht mehr (abgemeldet im
-	 * Browser, von der Technik widerrufen). Wie beim Abmelden aufraeumen, an der Anlage ist nichts
-	 * mehr abzumelden.
-	 */
-	private Ergebnis sitzungWeg(String text) {
-		Log.i(TAG, "Wiederherstellung: " + text);
-		Ergebnis e = warnung(text);
-		e.danach = () -> {
-			wiederherstellen = false;
-			aufraeumen(false);
-		};
-		return e;
-	}
-
-	private void aufraeumen(boolean anAnlageAbmelden) {
 		final Context app = getApplicationContext();
+		kopfText.setText("Abbrechen …");
 		new Thread(() -> {
-			if (anAnlageAbmelden) {
-				try {
-					Anlage.abmelden(app);
-				} catch (Exception e) {
-					Log.w(TAG, "Abbrechen: Abmelden an der Anlage: " + e);   // die Abmelde-Pruefung versucht es nochmals
-				}
+			try {
+				Anlage.abmelden(app);
+			} catch (Exception e) {
+				Log.w(TAG, "Abbrechen: Abmelden an der Anlage: " + e);   // die Abmelde-Pruefung versucht es nochmals
 			}
 			Aufraeumen.gemeinsamenSpeicherLeeren(app);
 			runOnUiThread(() -> {
-				Sperre.abmeldungVormerken(app, anAnlageAbmelden);
+				Sperre.abmeldungVormerken(app, true);
 				anmeldungLaeuft = false;
 				Sperre.sperren(this);
 				laeuft = true;
@@ -768,9 +714,10 @@ public class SperrActivity extends Activity {
 					String letzter;
 					while (true) {
 						try {
+							Bildschirmsperre.abmeldungAusfuehren(app);   // Neustart mit PIN: vorgemerkte Abmeldung
 							JSONObject st = Anlage.status(app);
 							if (!st.optBoolean("angemeldet", false)) return ok(null);
-							if (!ausdruecklich) {
+							if (!ausdruecklich && !Bildschirmsperre.abmeldungAusstehend(app)) {
 								// Neustart/Update ohne Abmelden: die Sitzung laeuft an der Anlage weiter -
 								// wie bisher wiederherstellen (mit dem Einrichtungsbildschirm).
 								String n = st.optString("name", "");
@@ -1063,6 +1010,8 @@ public class SperrActivity extends Activity {
 				zeige("Dieses Telefon ist noch nicht eingerichtet.", true);
 				return;
 			}
+			// Neustart mit persoenlicher PIN: erst abmelden, nie wiederherstellen
+			if (!Bildschirmsperre.abmeldungAusfuehren(this)) return;
 			JSONObject s = Anlage.status(this);
 			fehlversuche = 0;
 			if (!anlageDa) runOnUiThread(() -> anmeldenZeigen(true, null));
@@ -1110,12 +1059,10 @@ public class SperrActivity extends Activity {
 		kartenleserAus();
 		// Stefan 25.11.2026: Einrichtungsbildschirm - jeder Schritt wird ausgefuehrt und geprueft, kein
 		// Startbildschirm, bevor alle Pflicht-Schritte gruen sind.
-		wiederherstellen = Bildschirmsperre.neustartOffen(this);
 		Schritt[] s = anmeldeSchritte(name, apps);
-		ablaufStarten(wiederherstellen ? "Nach dem Neustart" : "Anmelden", titel(s));
-		ablaufLaufen(wiederherstellen ? "Wiederherstellung" : "Anmeldung", s, 0,
-				() -> handler.postDelayed(this::anmeldungAbschliessen, 800),
-				wiederherstellen ? null : this::anmeldungAbbrechen);
+		ablaufStarten("Anmelden", titel(s));
+		ablaufLaufen("Anmeldung", s, 0, () -> handler.postDelayed(this::anmeldungAbschliessen, 800),
+				this::anmeldungAbbrechen);
 	}
 
 	private void anmeldungAbschliessen() {
@@ -1123,13 +1070,6 @@ public class SperrActivity extends Activity {
 		if (isFinishing()) return;
 		// Alles davor haben die Schritte erledigt; hier nur noch Kiosk aus, Launcher als HOME, Dienst.
 		Sperre.freigebenAbschluss(this);
-		if (wiederherstellen) {
-			// Nach einem Neustart: erst die PIN der Person, dann ihr Startbildschirm - wer neu startet,
-			// kommt so nicht ohne PIN in die Sitzung (Grund fuer die fruehere Abmeldung, 24.11.2026).
-			wiederherstellen = false;
-			Bildschirmsperre.neustartErledigt(this);
-			if (geraetGesichert(this)) Bildschirmsperre.jetztSperren(this);
-		}
 		if (imLockTask()) {
 			try {
 				stopLockTask();
