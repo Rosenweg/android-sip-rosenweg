@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nur Debug-Builds: testOnly erlaubt, den Device Owner per adb wieder zu
+     entfernen (dpm remove-active-admin). Installation mit "adb install -t".
+     Release-Builds haben das NICHT — dort ist Device Owner endgueltig. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:testOnly="true" />
+</manifest>

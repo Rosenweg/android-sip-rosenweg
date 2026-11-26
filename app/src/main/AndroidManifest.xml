@@ -37,18 +37,30 @@
 	<uses-feature android:name="android.hardware.telephony" android:required="false"/>
 	<uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
 	<uses-feature android:name="android.hardware.wifi" android:required="false"/>
+	<!-- Rosenweg: Daten der Anlage nur fuer Apps mit derselben Signatur (Rosenweg Telefon) -->
+	<permission android:name="ch.rosenweg4303.permission.ANLAGE" android:protectionLevel="signature" />
 	<application android:name="org.sipdroid.sipua.SipdroidApp" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:label="@string/app_name" android:theme="@style/MyHoloTheme">
 
 
 
+        <!-- Rosenweg: Startsymbol ist die Rosenweg-Ansicht. Die Sipdroid-Einstellungen
+             zeigen SIP-Zugangsdaten und sind darum nicht mehr direkt im Launcher
+             (ohne Device Owner per Knopf in der Rosenweg-Ansicht erreichbar). -->
         <activity android:name="org.sipdroid.sipua.ui.Settings" android:label="@string/app_name"
         	android:configChanges="orientation|keyboardHidden"
-        	android:exported="true">
+        	android:exported="false" />
+        <activity android:name=".rosenweg.RosenwegActivity" android:label="@string/app_name"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".rosenweg.WebAppActivity" android:label="Rosenweg"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@android:style/Theme.DeviceDefault" />
         <activity
 	   android:name="org.sipdroid.codecs.Codecs$CodecSettings"
 	   android:label="@string/app_name" >
@@ -67,9 +79,36 @@
 	      	<intent-filter>
 	        	<action android:name="android.intent.action.PACKAGE_REPLACED" />
 	        	<data android:scheme="package" />
-	        	<data android:path="com.androidsip.app" />
+	        	<data android:path="ch.rosenweg4303.telefon" />
 	      	</intent-filter>
 	    </receiver>
+        <!-- Rosenweg: persoenliche PIN nach einem Neustart vor dem ersten Entsperren entfernen -->
+        <!-- Rosenweg: nach dem Abmelden offene Dateien fertig hochladen (Nachlauf.java) -->
+        <service android:name=".rosenweg.Nachlauf" android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <receiver android:name=".rosenweg.WlanDebug" android:exported="false" />
+        <!-- Samsung-Aufforderungen ("Beenden der Galaxy-Einrichtung") entfernen; Freigabe per adb -->
+        <service android:name=".rosenweg.Benachrichtigungen"
+            android:exported="false"
+            android:label="Rosenweg Gerät"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <service android:name=".rosenweg.WlanBestaetiger"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/wlan_bestaetiger" />
+        </service>
+        <receiver android:name=".rosenweg.BootEntsperren" android:exported="true" android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <receiver android:name="org.sipdroid.sipua.ui.PhoneStart" android:exported="true" >
             <intent-filter>
                 <action android:name="com.androidsip.START_SIPDROID" />
@@ -88,7 +127,123 @@
                 <action android:name="android.telecom.ConnectionService" />
             </intent-filter>
         </service>
+
+        <!-- ─── Rosenweg: geteiltes Telefon (Anmeldung, Sperre als Device Owner) ─── -->
+        <receiver android:name=".rosenweg.AdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data android:name="android.app.device_admin"
+                android:resource="@xml/rosenweg_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".rosenweg.StartReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Startbildschirm im gesperrten Zustand: Device Owner setzt ihn per
+             addPersistentPreferredActivity als HOME; lockTaskMode erlaubt den Kiosk. -->
+        <!-- Telefon suchen: Vollbild mit "Gefunden" (auch ueber dem Sperrbildschirm) -->
+        <activity android:name=".rosenweg.SuchAktivitaet"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:lockTaskMode="if_whitelisted"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+        <activity android:name=".rosenweg.SperrActivity"
+            android:label="Rosenweg Telefon"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:lockTaskMode="if_whitelisted"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!-- HOME nur im gesperrten Zustand: Sperre schaltet diesen Alias ein/aus.
+             Fest an der Activity wuerde Android nach der Anmeldung fragen,
+             welcher Startbildschirm gelten soll. -->
+        <activity-alias android:name=".rosenweg.SperrHome"
+            android:targetActivity=".rosenweg.SperrActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+        <!-- NFC-Karte angetippt (UniFi-Access-Karten), waehrend nicht der Sperrbildschirm vorne ist: Anmeldung per Karte. -->
+        <activity android:name=".rosenweg.NfcKarte"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+            <meta-data android:name="android.nfc.action.TECH_DISCOVERED" android:resource="@xml/nfc_karten" />
+        </activity>
+        <receiver android:name=".rosenweg.InstallEmpfaenger" android:exported="false" />
+        <!-- Rueckmeldung des Rosenweg Launchers: Startseite geladen/zurueckgesetzt (nur Rosenweg-Signatur) -->
+        <receiver android:name=".rosenweg.StartseiteGeladen" android:exported="true"
+            android:permission="ch.rosenweg4303.permission.ANLAGE">
+            <intent-filter>
+                <action android:name="ch.rosenweg4303.telefon.STARTSEITE_GELADEN" />
+            </intent-filter>
+        </receiver>
+        <!-- Wartung per USB: nur die adb-Shell hat DUMP. -->
+        <receiver android:name=".rosenweg.AdbFreigabe" android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="ch.rosenweg4303.telefon.ADB_INSTALLATION" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_INSTALLATION_ENDE" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_ABGLEICH" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_NEBENSTELLE" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_SELBST_FREIGEBEN" />
+                <action android:name="ch.rosenweg4303.telefon.ADB_SELBST_WIEDERHERSTELLEN" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".rosenweg.KontoDienst" android:exported="false">
+            <intent-filter>
+                <action android:name="android.accounts.AccountAuthenticator" />
+            </intent-filter>
+            <meta-data android:name="android.accounts.AccountAuthenticator"
+                android:resource="@xml/rosenweg_konto" />
+        </service>
+        <service android:name=".rosenweg.AnmeldeDienst"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Zeigt die Anmeldung am geteilten Telefon und bietet Abmelden an" />
+        </service>
+		<provider android:name="org.sipdroid.sipua.rosenweg.AnlageProvider"
+			android:authorities="ch.rosenweg4303.telefon.anlage"
+			android:exported="true"
+			android:readPermission="ch.rosenweg4303.permission.ANLAGE" />
     </application>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+	<uses-permission android:name="android.permission.CAMERA"/>
+	<uses-permission android:name="android.permission.NFC"/>
+	<!-- Beim Abmelden den gemeinsamen Speicher (Fotos, Downloads ...) leeren.
+	     Einmalig per adb: appops set ch.rosenweg4303.telefon MANAGE_EXTERNAL_STORAGE allow -->
+	<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+	<uses-permission android:name="android.permission.READ_CONTACTS"/>
+	<uses-permission android:name="android.permission.WRITE_CONTACTS"/>
+	<uses-permission android:name="android.permission.GET_ACCOUNTS"/>
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+	<!-- Der App-Katalog ist dynamisch: ohne das sieht die App die installierten
+	     Katalog-Apps nicht (Paket-Sichtbarkeit seit Android 11) und installiert
+	     sie bei jedem Abgleich neu. Kein Play-Store-Vertrieb, daher unbedenklich. -->
+	<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+	<uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+	<uses-feature android:name="android.hardware.nfc" android:required="false"/>
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 	<uses-permission android:name="android.permission.INTERNET"/>
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 	<uses-permission android:name="android.permission.RECORD_AUDIO"/>
@@ -97,8 +252,15 @@
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
 	<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+	<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+	<!-- Rosenweg: WLAN-Namen lesen (Debugging ueber WLAN nur im WLAN "Rosenweg") -->
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+	<uses-permission android:name="android.permission.SET_WALLPAPER"/>
+    <uses-permission android:name="ch.rosenweg4303.permission.ANLAGE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>

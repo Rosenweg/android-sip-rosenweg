@@ -58,9 +58,9 @@ public class Settings extends PreferenceActivity implements OnSharedPreferenceCh
 	private Settings context = null;
 
 	// Path where is stored the shared preference file - !!!should be replaced by some system variable!!!
-	public static String sharedPrefsPath = "/data/data/com.androidsip.app/shared_prefs/";
+	public static String sharedPrefsPath = "/data/data/ch.rosenweg4303.telefon/shared_prefs/";
 	// Shared preference file name - !!!should be replaced by some system variable!!!
-	private final String sharedPrefsFile = "com.androidsip.app_preferences";
+	private final String sharedPrefsFile = "ch.rosenweg4303.telefon_preferences";
 	// List of profile files available on the SD card
 	private String[] profileFiles = null;
 

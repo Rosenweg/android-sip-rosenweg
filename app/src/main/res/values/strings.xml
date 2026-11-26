@@ -27,7 +27,7 @@
 
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
 
-<string name="app_name">Android SIP</string>
+<string name="app_name">Rosenweg Gerät</string>
 <string name="pstn_name">Phone Call</string>
 <string name="sip_name">Android SIP Call, when available</string>
 
@@ -339,6 +339,7 @@
     <item>3.0</item>
     <item>4.0</item>
 </string-array>
+    <string name="rosenweg_wlan_bestaetiger">Rosenweg Gerät: bestätigt für die Wartung nur die Android-Abfrage „Debugging über WLAN zulassen“ im WLAN „Rosenweg“ – und nur, wenn die Anlage das Debugging eingeschaltet hat.</string>
 </resources>
 
 

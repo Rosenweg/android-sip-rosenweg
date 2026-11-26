@@ -132,6 +132,10 @@ import org.zoolu.sip.provider.SipProvider;
 		public static Context mContext;
 		public static Service sContext;
 		public static SipConnection activeConnection;
+		/** Rosenweg: Anzeigename aus dem From-Header des laufenden eingehenden Anrufs. */
+		public static String incomingDisplayName = null;
+		/** Rosenweg: Name des Anrufkontos in der Telefon-App. */
+		public static final String ACCOUNT_LABEL = "Rosenweg";
 		public static android.telecom.PhoneAccountHandle phoneAccountHandle = null;
 		public static String telecomSetupError = null;
 
@@ -184,12 +188,12 @@ import org.zoolu.sip.provider.SipProvider;
 				String callerId = getActiveCallerId(context);
 				String shortDesc;
 				if (callerId != null && !callerId.isEmpty() && !callerId.equals("Android SIP Calls")) {
-					shortDesc = isAnyRegistered ? callerId : callerId + " (Offline)";
+					shortDesc = ACCOUNT_LABEL + " · " + callerId + (isAnyRegistered ? "" : " (Offline)");
 				} else {
-					shortDesc = isAnyRegistered ? "Android SIP" : "Android SIP (Offline)";
+					shortDesc = isAnyRegistered ? ACCOUNT_LABEL : ACCOUNT_LABEL + " (Offline)";
 				}
 				
-				android.telecom.PhoneAccount.Builder builder = android.telecom.PhoneAccount.builder(phoneAccountHandle, "Android SIP")
+				android.telecom.PhoneAccount.Builder builder = android.telecom.PhoneAccount.builder(phoneAccountHandle, ACCOUNT_LABEL)
 						.setShortDescription(shortDesc)
 						.addSupportedUriScheme("sip")
 						.addSupportedUriScheme("sipdroid")
@@ -276,6 +280,37 @@ import org.zoolu.sip.provider.SipProvider;
 					if (text2.indexOf("\"") >= 0)
 						text2 = text2.substring(text2.indexOf("\"")+1,text2.lastIndexOf("\""));
 					broadcastCallStateChanged("RINGING", caller);
+					// Rosenweg: Wartungsanruf (2098) - lautlos ablehnen und den Status holen
+					// (zentral eingeschaltetes "Debugging ueber WLAN")
+					if (org.sipdroid.sipua.rosenweg.Suchen.istWartung(text)) {
+						final Context wc = mContext.getApplicationContext();
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> engine(wc).rejectcall());
+						new Thread(() -> {
+							try { org.sipdroid.sipua.rosenweg.Anlage.status(wc); }
+							catch (Exception e) { android.util.Log.w("RosenwegWlanDebug", "Status nach Wartungsanruf: " + e); }
+						}, "Wartung").start();
+						break;
+					}
+					// Rosenweg: Suchanruf der Anlage (2099) klingelt mit voller Lautstaerke
+					if (org.sipdroid.sipua.rosenweg.Suchen.istSuchanruf(text)) {
+						// Suchanruf: eigenes Vollbild "Telefon gesucht" mit "Gefunden" statt der
+						// normalen Anrufanzeige (kein Annehmen/Ablehnen), laut auch bei stumm.
+						org.sipdroid.sipua.rosenweg.Suchen.laut(mContext);
+						break;
+					}
+					// Rosenweg: abgemeldet gibt es keine Telefon-App (nicht im Sperrmodus erlaubt,
+					// Anrufliste gehoert der Person) - normale Anrufe an die Nebenstelle ablehnen.
+					if (!org.sipdroid.sipua.rosenweg.Anlage.angemeldet(mContext)
+							&& org.sipdroid.sipua.rosenweg.Anlage.eingerichtet(mContext)) {
+						android.util.Log.i("RosenwegSperre", "Anruf abgelehnt: niemand angemeldet");
+						new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> engine(mContext).rejectcall());
+						break;
+					}
+					// Rosenweg: den Anzeigenamen nicht wegwerfen. Die Anlage setzt dort
+					// den Namen aus dem Rosenweg-Verzeichnis (CNAM); ohne ihn zeigte die
+					// Telefon-App nur die Nummer.
+					incomingDisplayName = (text2 != null && caller.indexOf("\"") >= 0
+							&& text2.trim().length() > 0) ? text2.trim() : null;
 //			        mContext.sendBroadcast(new Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS));
 					String cleanAddress = caller;
 					if (cleanAddress != null) {
@@ -334,6 +369,7 @@ import org.zoolu.sip.provider.SipProvider;
 					break;
 				case UserAgent.UA_STATE_IDLE:
 					stopCallForeground();
+					org.sipdroid.sipua.rosenweg.Suchen.zurueck(mContext);
 					broadcastCallStateChanged("IDLE", null);
 					onText(CALL_NOTIFICATION, null, 0,0);
 					if (activeConnection != null) {
@@ -880,6 +916,12 @@ import org.zoolu.sip.provider.SipProvider;
 		}   
 
 		public static String getActiveCallerId(Context context) {
+			// Rosenweg: am geteilten Telefon steht der Name der angemeldeten Person
+			// im Anrufkonto ("Rosenweg · Name").
+			if (org.sipdroid.sipua.rosenweg.Anlage.angemeldet(context)) {
+				String rwName = org.sipdroid.sipua.rosenweg.Anlage.name(context);
+				if (rwName != null && !rwName.isEmpty()) return rwName;
+			}
 			org.sipdroid.sipua.SipdroidEngine engine = Receiver.mSipdroidEngine;
 			if (engine != null && engine.ras != null) {
 				for (int i=0; i<engine.ras.length; i++) {
