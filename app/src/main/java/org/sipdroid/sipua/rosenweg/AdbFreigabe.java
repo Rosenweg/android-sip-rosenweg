@@ -16,6 +16,10 @@ import android.util.Log;
  *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_ABGLEICH \\
  *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
  *
+ * Installationsverbot sofort wieder setzen (adb-Updater der Anlage nach "adb install", v237):
+ *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_INSTALLATION_ENDE \
+ *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
+ *
  * Nebenstelle umstellen (Nummernplan, 24.11.2026: Geraete 2100-2199), Passwort bleibt:
  *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_NEBENSTELLE --es ext 2102 \
  *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
@@ -26,6 +30,8 @@ import android.util.Log;
  */
 public class AdbFreigabe extends BroadcastReceiver {
 	static final String ABGLEICH = "ch.rosenweg4303.telefon.ADB_ABGLEICH";
+	static final String INSTALLATION = "ch.rosenweg4303.telefon.ADB_INSTALLATION";
+	static final String INSTALLATION_ENDE = "ch.rosenweg4303.telefon.ADB_INSTALLATION_ENDE";
 	static final String NEBENSTELLE = "ch.rosenweg4303.telefon.ADB_NEBENSTELLE";
 	/** C: eigenen adb-Schluessel einmal freigeben (Einrichtungsskript, Port 5555 offen). */
 	static final String SELBST_FREIGEBEN = "ch.rosenweg4303.telefon.ADB_SELBST_FREIGEBEN";
@@ -62,6 +68,16 @@ public class AdbFreigabe extends BroadcastReceiver {
 			// Katalog, Ausblendliste, Telefonbuch sofort holen — statt Neustart.
 			Log.i("RosenwegKatalog", "Abgleich per adb angestossen");
 			Katalog.vielleichtAbgleichen(c, true);
+			return;
+		}
+		if (INSTALLATION_ENDE.equals(i.getAction())) {
+			Log.i("RosenwegKatalog", "Installationsverbot per adb wieder gesetzt");
+			Katalog.installationErlauben(c, false);
+			return;
+		}
+		if (!INSTALLATION.equals(i.getAction())) {
+			// explizite Intents kommen auch ohne passenden Filter an: Unbekanntes nie als Freigabe nehmen
+			Log.w("RosenwegKatalog", "unbekannte adb-Aktion " + i.getAction());
 			return;
 		}
 		Log.w("RosenwegKatalog", "Installationsverbot per adb fuer 10 Minuten aufgehoben");

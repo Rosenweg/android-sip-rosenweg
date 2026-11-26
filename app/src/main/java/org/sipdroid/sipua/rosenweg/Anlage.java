@@ -166,6 +166,9 @@ public final class Anlage {
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
 		if (s.has("wlan_debug_bis")) WlanDebug.zentral(c, s.optLong("wlan_debug_bis", 0));
+		// adb-Updater der Anlage einmal zulassen (/smartphones "Updater zulassen", v237)
+		JSONObject dienst = s.optJSONObject("adb_dienst");
+		if (dienst != null) AdbSelbst.dienstErwarten(c, dienst.optString("fingerabdruck", ""), dienst.optLong("bis", 0));
 		Wlan.vielleicht(c, s.optBoolean("angemeldet", false));
 		return s;
 	}

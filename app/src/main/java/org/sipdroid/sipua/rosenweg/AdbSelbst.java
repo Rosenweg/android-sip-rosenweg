@@ -242,6 +242,58 @@ public class AdbSelbst {
 		}
 	}
 
+	// ─── Schluessel des adb-Updaters der Anlage einmal zulassen (v237) ────────
+
+	private static android.os.PowerManager.WakeLock dienstWach;
+
+	/**
+	 * Status der Anlage {adb_dienst: {fingerabdruck, bis}} (/smartphones "Updater zulassen"): bis
+	 * "bis" darf die Bedienungshilfe "USB-Debugging zulassen?" fuer genau diesen Fingerabdruck
+	 * bestaetigen - nur solange die Wartung zentral an ist. Bildschirm und SystemUI (Kiosk) sind
+	 * dafuer so lange an bzw. zugelassen; nach der Bestaetigung oder am Ende wieder wie vorher.
+	 */
+	public static synchronized void dienstErwarten(Context c, String fingerabdruck, long bisSek) {
+		final Context app = c.getApplicationContext();
+		long rest = bisSek * 1000L - System.currentTimeMillis();
+		if (fingerabdruck == null || !fingerabdruck.matches("([0-9A-F]{2}:){15}[0-9A-F]{2}") || rest <= 0
+				|| rest > 10 * 60_000L || !WlanDebug.zentralAn(app)) return;
+		if (fingerabdruck.equals(prefs(app).getString("dienst_fp", "")) && dienstErwartet(app)) return;
+		prefs(app).edit().putString("dienst_fp", fingerabdruck).putLong("dienst_bis", bisSek * 1000L).apply();
+		Log.i(TAG, "Schluessel des Updaters erwartet: " + fingerabdruck);
+		systemUiZulassen(app, true);
+		try {
+			android.os.PowerManager pm = app.getSystemService(android.os.PowerManager.class);
+			if (dienstWach == null) {
+				@SuppressWarnings("deprecation")
+				android.os.PowerManager.WakeLock w = pm.newWakeLock(android.os.PowerManager.SCREEN_DIM_WAKE_LOCK
+						| android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP, "Rosenweg:AdbDienst");
+				dienstWach = w;
+				dienstWach.acquire(rest);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "wecken: " + e.getClass().getSimpleName());
+		}
+		new Handler(Looper.getMainLooper()).postDelayed(() -> dienstEnde(app), rest + 1000);
+	}
+
+	/** Fingerabdruck des Updaters, solange er erwartet wird, sonst "". */
+	static String dienstFingerabdruck(Context c) {
+		return dienstErwartet(c) ? prefs(c).getString("dienst_fp", "") : "";
+	}
+
+	private static boolean dienstErwartet(Context c) {
+		return System.currentTimeMillis() < prefs(c).getLong("dienst_bis", 0) && WlanDebug.zentralAn(c);
+	}
+
+	/** Bestaetigt oder abgelaufen: Bildschirm und Kiosk wieder wie vorher. */
+	static synchronized void dienstEnde(Context c) {
+		if (prefs(c).getLong("dienst_bis", 0) == 0 && dienstWach == null) return;
+		prefs(c).edit().remove("dienst_bis").remove("dienst_fp").apply();
+		try { if (dienstWach != null && dienstWach.isHeld()) dienstWach.release(); } catch (Exception ignored) { }
+		dienstWach = null;
+		systemUiZulassen(c, false);
+	}
+
 	// ─── Einstellungen, die nur adb setzen darf, selbst pruefen ───────────────
 
 	/**

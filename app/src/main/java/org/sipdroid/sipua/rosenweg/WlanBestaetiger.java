@@ -23,7 +23,9 @@ public class WlanBestaetiger extends AccessibilityService {
 
 	@Override
 	public void onAccessibilityEvent(AccessibilityEvent e) {
-		if (AdbSelbst.erwartetFreigabe(this)) schluesselFreigeben();
+		if (AdbSelbst.erwartetFreigabe(this)) schluesselFreigeben(AdbSelbst.eigenerFingerabdruck(this), false);
+		String dienst = AdbSelbst.dienstFingerabdruck(this);
+		if (!dienst.isEmpty()) schluesselFreigeben(dienst, true);
 		if (!WlanDebug.erwartetBestaetigung(this)) return;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
 		if (wurzel == null) return;
@@ -61,11 +63,12 @@ public class WlanBestaetiger extends AccessibilityService {
 
 	/**
 	 * C: "USB-Debugging zulassen?" fuer den EIGENEN Schluessel von Rosenweg Geraet (AdbSelbst.
-	 * freigeben). Nur wenn Geraet es gerade angestossen hat UND der angezeigte Fingerabdruck
-	 * genau der eigene ist - fremde Rechner bestaetigt nie die Bedienungshilfe.
+	 * freigeben) oder - ab v237 - fuer den Schluessel des adb-Updaters der Anlage (AdbSelbst.
+	 * dienstErwarten, nur waehrend "Updater zulassen" und zentral eingeschalteter Wartung).
+	 * Nur wenn der angezeigte Fingerabdruck genau der erwartete ist - fremde Rechner bestaetigt
+	 * die Bedienungshilfe nie.
 	 */
-	private void schluesselFreigeben() {
-		String fp = AdbSelbst.eigenerFingerabdruck(this);
+	private void schluesselFreigeben(String fp, boolean dienst) {
 		if (fp.isEmpty()) return;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
 		if (wurzel == null) return;
@@ -88,7 +91,9 @@ public class WlanBestaetiger extends AccessibilityService {
 				CharSequence txt = n.getText();
 				if (txt != null && txt.toString().trim().equalsIgnoreCase(t) && n.isClickable()) {
 					n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-					Log.i(TAG, "eigener adb-Schluessel von Rosenweg Geraet zugelassen (" + fp + ")");
+					Log.i(TAG, (dienst ? "Schluessel des adb-Updaters der Anlage" : "eigener adb-Schluessel von Rosenweg Geraet")
+							+ " zugelassen (" + fp + ")");
+					if (dienst) AdbSelbst.dienstEnde(this);
 					return;
 				}
 			}
