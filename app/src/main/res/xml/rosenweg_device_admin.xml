@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Rosenweg: Device-Admin-Richtlinien. Device Owner braucht keine einzelnen
      Policies fuer Lock-Task/Persistent-Preferred-Activities; die Liste ist leer
-     gehalten, damit nichts mehr erlaubt ist als noetig.
-     force-lock: nach einem Neustart mit Sitzung sperrt Geraet den Bildschirm mit
-     der persoenlichen PIN (lockNow), bevor die Person wieder hineinkommt (v239). -->
+     gehalten, damit nichts mehr erlaubt ist als noetig. -->
 <device-admin>
-    <uses-policies>
-        <force-lock />
-    </uses-policies>
+    <uses-policies />
 </device-admin>
