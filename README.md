@@ -1,33 +1,34 @@
-# Android SIP (Modernized Sipdroid Fork)
+# Rosenweg Gerät
 
-Android SIP is an open-source SIP client for Android. This fork modernizes the historic Sipdroid application with updated user interfaces, dynamic theme support, and quality-of-life improvements while retaining its robust SIP core.
+Geräteverwaltung (Device Owner) der geteilten Smartphones der Siedlung Rosenweg in Kaiseraugst. Rosenweg Gerät sperrt das Telefon, bis sich eine Person anmeldet, installiert die Rosenweg-Apps aus dem Katalog der Telefonanlage und gibt den Apps die Zugänge der angemeldeten Person. Gleichzeitig ist es die SIP-Nebenstelle des Telefons an der Rosenweg-Telefonanlage. Grundlage ist Android SIP, eine modernisierte Fassung von Sipdroid.
 
-## ✨ Features & Changes in this Fork
+## Im Rosenweg
 
-- **Native Telecom Integration:** The outdated custom dialer and call screens have been fully removed. Android SIP now seamlessly integrates with the native Android Telecom framework. Your SIP account acts as a native calling account in the system dialer, providing a 100% native call experience.
-- **Material Design 3 Upgrade & Adaptive Icon:** The application UI has been fully revamped using Material Design 3 principles, including updated padding, sizing, and modern adaptive launcher iconography with multi-density support.
-- **Zero Notification Footprint:** The SIP engine runs completely silently in background without any persistent notifications or status bar clutter.
-- **Reliable Cold-Start & Idle Calling:** Active keepalives and asynchronous registration retries ensure first-attempt call success even after extended idle periods.
-- **Pure Native Ringtone & Audio:** Incoming calls play the device's default system ringtone via Telecom with clean audio hardware initialization upon answer.
-- **Intelligent Account Management:** When the SIP engine loses connection to the server, the native calling account capabilities are dynamically toggled to gracefully hide it from your system dialer options without losing your permanent enabled permissions.
-- **Modern Cloud Backups:** Replaced the obsolete SD-card text backup system with standard Android Storage Access Framework (SAF) `XML` backups, allowing seamless import/export of configuration to any cloud drive or local folder.
-- **Cleaner Notifications:** Ongoing call notifications now display a clean, readable Caller ID rather than leaking the raw SIP connection URIs, and the SIP account settings have been refined for better visibility.
+- **Anmelden und Abmelden:** Sperrbildschirm mit Anmeldung per NFC-Karte (UniFi Access), QR-Code oder Rosenweg-Konto; persönliche PIN als Bildschirmsperre. Beim Abmelden werden die Daten persönlicher Apps und Web-Sitzungen gelöscht; abgemeldet wird erst, wenn alle Apps ihre Dateien hochgeladen haben.
+- **App-Katalog:** Installiert die freigegebenen Apps still von der Telefonanlage (Prüfsumme kontrolliert), blendet sie ohne Anmeldung aus und entfernt Apps, die aus dem Katalog verschwinden. Andere Installationen sind gesperrt.
+- **Zugänge für die Rosenweg-Apps:** Nextcloud-Zugang, persönliche Telefonnummer (Rosenweg Telefon), Messenger-Zugang (Rosenweg Messenger) sowie Einstellungen und Startseite pro Person, alles über einen nur für Rosenweg-signierte Apps zugänglichen Provider.
+- **Telefon:** Nebenstelle des Geräts, Telefonbuch der Siedlung als eigenes Konto im Android-Adressbuch, "Telefon suchen" (klingelt laut, auch stumm oder bei "Nicht stören").
+- **Sperrbild und Startansicht:** Rosenweg-Logo bzw. Logo der Gruppe oder des Hauses der angemeldeten Person; Startansicht mit Kacheln für die Rosenweg-Web-Apps und die installierten Apps.
+- **WLAN und Wartung:** richtet das Rosenweg-WLAN mit persönlichem Schlüssel ein; Wartung über adb, zentral von der Anlage aus einschaltbar.
+- **Karten:** Schnittstelle für [Rosenweg Karten](https://github.com/Rosenweg/rosenweg-karten) (NFC-Karten nachschlagen, zuordnen, entziehen).
 
-### ⚠️ Known Issues
-- **INVITE Retransmissions During Extended Ringing:** When an outbound call is challenged with `407 Proxy Authentication`, retransmitted authenticated INVITEs may repeat at 4-second intervals during ringing until answered or terminated.
+Mehr zur Nutzung der geteilten Telefone: [www.rosenweg4303.ch/smartphones](https://www.rosenweg4303.ch/smartphones).
 
-## 🙌 Credits & Acknowledgments
+## Installation
 
-This fork is built upon the phenomenal work of the original Sipdroid developers and contributors. All original rights and credits belong to:
+Rosenweg Gerät wird nur auf den geteilten Rosenweg-Telefonen eingerichtet, und zwar als Device Owner (auf einem frisch zurückgesetzten Telefon). Das macht die Technik. Für ein eigenes Handy ist die App nicht gedacht; dort genügen die einzelnen Rosenweg-Apps von [www.rosenweg4303.ch/apps](https://www.rosenweg4303.ch/apps).
 
-- **The Sipdroid Open Source Project** (http://sipdroid.org) - Copyright (C) 2009
-- **Hughes Systique Corporation, USA** (http://hsc.com) - Copyright (C) 2008 *(Initial port and development of a Test SIP Client to Google's Android Platform)*
-- **The Android Open Source Project** (http://android.com) - Copyright (C) 2006
-- **Luca Veltri, University of Parma, Italy** (http://mjsip.org) - Copyright (C) 2005 *(Mjsip original stack)*
+## Bauen
 
-*Welcome to the growing worldwide community of Sipdroid users and developers!*
+```bash
+# Zweig rosenweg
+./gradlew assembleRelease
+```
 
-## 📜 License
+Braucht das Android NDK (native Codecs über `ndkBuild`). Signiert wird mit `keystore.properties` (nicht im Repo). Der Schlüssel muss derselbe sein wie bei den übrigen Rosenweg-Apps, weil diese nur Rosenweg-signierten Apps Zugang geben. Paketname: `ch.rosenweg4303.telefon`.
 
-This project is licensed under the GNU General Public License v3 (or later). 
-Please see the source files for complete license details and copyright headers.
+## Herkunft und Lizenz
+
+Fork von [Android SIP](https://github.com/hell3lazer/Android-SIP), einer modernisierten Fassung von [Sipdroid](https://github.com/i-p-tel/sipdroid). Der Zweig `master` folgt dem Original, die Rosenweg-Anpassungen liegen im Zweig `rosenweg`. Herzlichen Dank an die Sipdroid-Entwickler (Sipdroid Open Source Project, Hughes Systique, mjsip/Luca Veltri, Android Open Source Project) und an den Autor von Android SIP.
+
+Lizenz: GNU General Public License v3.0, siehe [LICENSE.TXT](LICENSE.TXT), mit den zusätzlichen Bedingungen von Sipdroid in [ADDITIONAL_TERMS.txt](ADDITIONAL_TERMS.txt). Der Info-Dialog mit den Sipdroid-Hinweisen bleibt deshalb unverändert; die Rosenweg-Angaben stehen an seinem Ende.
