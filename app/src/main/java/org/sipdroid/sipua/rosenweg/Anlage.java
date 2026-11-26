@@ -305,6 +305,22 @@ public final class Anlage {
 		merke(c, false, null);
 	}
 
+	/**
+	 * POST /api/telefon/portal {methode, pfad, koerper, paket} -> {status, json, sitzung}:
+	 * Anfrage einer Rosenweg-App an die Haupt-API im Namen der angemeldeten Person
+	 * (AnlageProvider "portal_anfrage"). Die Anlage stellt dafuer ein Token fuer genau diese
+	 * Anfrage aus und behaelt es — hier kommt nur die Antwort an.
+	 * AnlageFehler 409: niemand angemeldet, 403: Pfad fuer diese App nicht freigegeben.
+	 */
+	public static JSONObject portal(Context c, String methode, String pfad, String koerper, String paket) throws Exception {
+		JSONObject k = new JSONObject()
+				.put("methode", methode)
+				.put("pfad", pfad)
+				.put("paket", paket)
+				.put("koerper", koerper == null ? JSONObject.NULL : koerper);
+		return anfrage(c, "POST", "/api/telefon/portal", k.toString(), 22000);
+	}
+
 	/** POST /api/telefon/gefunden — Suchanruf mit "Gefunden" beantwortet (Geraetezugang). */
 	public static JSONObject gefunden(Context c) throws Exception {
 		return anfrage(c, "POST", "/api/telefon/gefunden", "{}");
