@@ -319,22 +319,60 @@ public final class Sperre {
 		Receiver.updatePhoneAccount(c);
 		sipPersonGeaendert(c);    // Rosenweg Telefon: persoenliches SIP-Konto abmelden
 		c.stopService(new Intent(c, AnmeldeDienst.class));
-		if (istDeviceOwner(c)) {
-			DevicePolicyManager d = dpm(c);
-			ComponentName a = admin(c);
-			try {
-				homeAlias(c, true);
-				// Festlegung "Launcher = Home" vom Anmelden weg, sonst gewinnt sie
-				d.clearPackagePersistentPreferredActivities(a, LAUNCHER_PAKET);
-				IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
-				home.addCategory(Intent.CATEGORY_HOME);
-				home.addCategory(Intent.CATEGORY_DEFAULT);
-				d.addPersistentPreferredActivity(a, home, homeKomponente(c));
-				d.setStatusBarDisabled(a, true);
-			} catch (Exception e) {
-				Log.e(TAG, "sperren", e);
-			}
+		Bildschirmsperre.neustartErledigt(c);   // niemand mehr da, dessen Sitzung wiederherzustellen waere
+		kioskHome(c);
+		Intent i = new Intent(c, SperrActivity.class);
+		i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+		c.startActivity(i);
+	}
+
+	/** Sperrbildschirm als HOME, Statusleiste aus (nur Device-Owner-Aufrufe, nichts geloescht). */
+	private static void kioskHome(Context c) {
+		if (!istDeviceOwner(c)) return;
+		DevicePolicyManager d = dpm(c);
+		ComponentName a = admin(c);
+		try {
+			homeAlias(c, true);
+			// Festlegung "Launcher = Home" vom Anmelden weg, sonst gewinnt sie
+			d.clearPackagePersistentPreferredActivities(a, LAUNCHER_PAKET);
+			IntentFilter home = new IntentFilter(Intent.ACTION_MAIN);
+			home.addCategory(Intent.CATEGORY_HOME);
+			home.addCategory(Intent.CATEGORY_DEFAULT);
+			d.addPersistentPreferredActivity(a, home, homeKomponente(c));
+			d.setStatusBarDisabled(a, true);
+		} catch (Exception e) {
+			Log.e(TAG, "kioskHome", e);
 		}
+	}
+
+	/**
+	 * Direkt nach dem Neustart (Direct Boot, vor dem ersten Entsperren): Kiosk an, ohne etwas zu
+	 * loeschen oder abzumelden. Nur Device-Owner-Aufrufe, keine Einstellungen der App (die liegen
+	 * im noch verschluesselten Speicher). So liegt nach dem Entsperren nie der Startbildschirm der
+	 * Person offen, bevor die Sitzung an der Anlage geprueft ist.
+	 */
+	static void kioskSofort(Context c) {
+		if (!istDeviceOwner(c)) return;
+		try {
+			String[] erlaubt = new String[ERLAUBT_GESPERRT.length + 1];
+			erlaubt[0] = c.getPackageName();
+			System.arraycopy(ERLAUBT_GESPERRT, 0, erlaubt, 1, ERLAUBT_GESPERRT.length);
+			dpm(c).setLockTaskPackages(admin(c), erlaubt);
+		} catch (Exception e) {
+			Log.e(TAG, "kioskSofort", e);
+		}
+		kioskHome(c);
+	}
+
+	/**
+	 * Neustart (oder Update waehrend der Wiederherstellung) mit angemeldeter Person: nicht abmelden,
+	 * nichts loeschen (Stefan 26.11.2026). Kiosk an und die SperrActivity pruefen lassen: kennt die
+	 * Anlage die Sitzung, richtet sie alles wieder ein (WLAN, Apps, Konten, PIN) und sperrt danach
+	 * mit der PIN der Person; sonst raeumt sie wie beim Abmelden auf.
+	 */
+	static void nachNeustartWiederherstellen(Context c) {
+		grundregeln(c);   // Lock-Task-Erlaubnisliste u.a.
+		kioskHome(c);
 		Intent i = new Intent(c, SperrActivity.class);
 		i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 		c.startActivity(i);
@@ -499,7 +537,7 @@ public final class Sperre {
 	/** Persoenliche PIN der angemeldeten Person von der Anlage holen und als Bildschirmsperre setzen. */
 	static void persoenlichePinSetzen(Context c) {
 		Bildschirmsperre.vorbereiten(c);
-		if (!Bildschirmsperre.bereit(c) || Bildschirmsperre.abmeldungAusstehend(c)) return;
+		if (!Bildschirmsperre.bereit(c)) return;
 		new Thread(() -> {
 			try {
 				org.json.JSONObject p = Anlage.pin(c);

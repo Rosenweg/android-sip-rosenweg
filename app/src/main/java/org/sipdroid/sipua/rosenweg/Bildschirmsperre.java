@@ -18,14 +18,17 @@ import java.security.SecureRandom;
  * (resetPasswordWithToken). Der Schluessel liegt im geraetegeschuetzten Speicher,
  * damit die Sperre auch direkt nach einem Neustart — vor dem ersten Entsperren —
  * wieder entfernt werden kann (BootEntsperren). Sonst verlangte das Telefon nach
- * einem Neustart die PIN der zuletzt angemeldeten Person.
+ * einem Neustart die PIN der zuletzt angemeldeten Person, bevor Geraet laufen kann.
+ * Laeuft die Sitzung an der Anlage weiter, setzt Geraet die PIN danach wieder (v239).
  */
 public final class Bildschirmsperre {
 	private static final String TAG = "Bildschirmsperre";
 	private static final String PREFS = "rosenweg_bildschirmsperre";
 	private static final String TOKEN = "token";
 	private static final String GESETZT = "gesetzt";
-	private static final String ABMELDEN = "nach_neustart_abmelden";
+	/** bis v238: Abmeldung nach Neustart vorgemerkt (wird nur noch entfernt) */
+	private static final String ABMELDEN_ALT = "nach_neustart_abmelden";
+	private static final String NEUSTART = "nach_neustart_wiederherstellen";
 
 	private Bildschirmsperre() {}
 
@@ -92,36 +95,36 @@ public final class Bildschirmsperre {
 	}
 
 	/**
-	 * Direkt nach dem Neustart (vor dem ersten Entsperren): PIN entfernen und die
-	 * Abmeldung vormerken. Die PIN darf nur zusammen mit einer Abmeldung weg
-	 * (Entscheid Stefan 24.11.2026) — sonst kaeme, wer neu startet, ohne PIN in
-	 * die Sitzung der Person.
+	 * Direkt nach dem Neustart (vor dem ersten Entsperren): PIN entfernen und den Neustart
+	 * vormerken. Bis v238 wurde die Person dabei abgemeldet (Entscheid 24.11.2026: "wer vergisst,
+	 * sich abzumelden, wird durch den Neustart abgemeldet"). Seit v239 (Stefan 26.11.2026: "nach
+	 * einem Neustart abgemeldet - das darf nicht sein") bleibt die Sitzung: die SperrActivity
+	 * prueft sie an der Anlage, stellt sie wieder her, setzt die PIN von der Anlage neu und sperrt
+	 * den Bildschirm (lockNow), bevor die Person wieder hineinkommt. Wer neu startet, kommt so
+	 * weiterhin nicht ohne PIN in die Sitzung, und das Telefon haengt nie an der PIN einer Person.
 	 */
 	public static void nachNeustart(Context c) {
-		if (!prefs(c).getBoolean(GESETZT, false)) return;
-		if (entfernen(c)) prefs(c).edit().putBoolean(ABMELDEN, true).commit();
+		prefs(c).edit().putBoolean(NEUSTART, true).remove(ABMELDEN_ALT).commit();
+		entfernen(c);
 	}
 
-	public static boolean abmeldungAusstehend(Context c) {
-		return prefs(c).getBoolean(ABMELDEN, false);
+	/** Neustart vorgemerkt, Sitzung noch nicht wiederhergestellt (PIN und Sperre ausstehend). */
+	public static boolean neustartOffen(Context c) {
+		return prefs(c).getBoolean(NEUSTART, false);
 	}
 
-	/** Vorgemerkte Abmeldung an der Anlage ausfuehren (Netz noetig). @return true wenn erledigt */
-	public static boolean abmeldungAusfuehren(Context c) {
-		if (!abmeldungAusstehend(c)) return true;
+	public static void neustartErledigt(Context c) {
+		if (neustartOffen(c)) prefs(c).edit().remove(NEUSTART).commit();
+	}
+
+	/** Bildschirm sofort sperren (Device Owner, Richtlinie force-lock). @return true bei Erfolg */
+	public static boolean jetztSperren(Context c) {
 		try {
-			Anlage.abmelden(c);
-			prefs(c).edit().putBoolean(ABMELDEN, false).commit();
-			Log.i(TAG, "Nach Neustart abgemeldet");
-			return true;
-		} catch (Anlage.AnlageFehler e) {
-			if (e.status >= 500) return false;
-			// 4xx: Geraet nicht (mehr) freigegeben — es gibt keine Sitzung abzumelden
-			prefs(c).edit().putBoolean(ABMELDEN, false).commit();
-			Log.w(TAG, "Abmelden nach Neustart: " + e.status + ", nichts abzumelden");
+			dpm(c).lockNow();
+			Log.i(TAG, "Bildschirm gesperrt");
 			return true;
 		} catch (Exception e) {
-			Log.w(TAG, "Abmelden nach Neustart: " + e);
+			Log.e(TAG, "lockNow", e);
 			return false;
 		}
 	}
