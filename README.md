@@ -11,6 +11,10 @@ Geräteverwaltung (Device Owner) der geteilten Smartphones der Siedlung Rosenweg
 - **Sperrbild und Startansicht:** Rosenweg-Logo bzw. Logo der Gruppe oder des Hauses der angemeldeten Person; Startansicht mit Kacheln für die Rosenweg-Web-Apps und die installierten Apps.
 - **WLAN und Wartung:** richtet das Rosenweg-WLAN mit persönlichem Schlüssel ein; Wartung über adb, zentral von der Anlage aus einschaltbar.
 - **Karten:** Schnittstelle für [Rosenweg Karten](https://github.com/Rosenweg/rosenweg-karten) (NFC-Karten nachschlagen, zuordnen, entziehen).
+- **An- und Abmelden Schritt für Schritt:** eigener Bildschirm mit den Schritten (Anlage, WLAN, Apps und Rechte, Telefonkonto, Nextcloud, PIN, Startseite) und ihrem Stand; bei einem Fehler hält er an (Nochmals versuchen / Abbrechen).
+- **Portal-Anfragen für die Flutter-Apps** (ab v236): `portal_anfrage` im Provider schickt Anfragen an die Rosenweg-API im Namen der angemeldeten Person über die Telefonanlage; die App selbst bekommt kein Token. Nur für Rosenweg-signierte Apps, mit Grössen- und Mengengrenzen.
+- **adb-Updater der Anlage** (ab v237): Die Telefonanlage kann neue App-Versionen selbst per adb einspielen. Ihr adb-Schlüssel wird je Telefon einmal zugelassen (nur genau dieser Fingerabdruck); nach der Installation ist das Installationsverbot sofort wieder gesetzt.
+- **Logo:** Rosenweg-Wappen (Turm, Weg, Rose auf Rot) mit dem Zeichen der App rechts unten, erzeugt mit dem Logo-Baukasten aus rosenweg-basis; dazu ein monochromes Designsymbol (Android 13+).
 
 Mehr zur Nutzung der geteilten Telefone: [www.rosenweg4303.ch/smartphones](https://www.rosenweg4303.ch/smartphones).
 
@@ -26,6 +30,12 @@ Rosenweg Gerät wird nur auf den geteilten Rosenweg-Telefonen eingerichtet, und 
 ```
 
 Braucht das Android NDK (native Codecs über `ndkBuild`). Signiert wird mit `keystore.properties` (nicht im Repo). Der Schlüssel muss derselbe sein wie bei den übrigen Rosenweg-Apps, weil diese nur Rosenweg-signierten Apps Zugang geben. Paketname: `ch.rosenweg4303.telefon`.
+
+Logo neu erzeugen (aus dem Repo-Wurzelverzeichnis, rosenweg-basis daneben): `sh assets/logo/erzeugen.sh`. Welches Zeichen die App trägt, steht in rosenweg-basis `werkzeug/logo/android-apps.txt`.
+
+## Neue Version
+
+APK wie oben bauen und signieren, dann `gh release create v<versionName> <datei.apk> --notes "Was ist neu"` (Tag = versionName der APK, eine APK je Release). Der Workflow `.github/workflows/apps.yml` (wiederverwendbarer Workflow `apps-release.yml` aus Rosenweg/Website) schickt sie an den App-Katalog der Telefonanlage, von dort kommt sie auf die geteilten Telefone (Rosenweg Gerät steht nicht auf www.rosenweg4303.ch/apps). Anmeldung per GitHub-OIDC, kein gespeichertes Geheimnis; die Anlage prüft Tag, Prüfsumme, Rosenweg-Signatur und Paketnamen. Der Workflow liegt im Standardzweig `master`; `gh release create` ohne `--target` setzt den Tag dort hin. Erneut senden: `gh workflow run apps.yml --ref <tag>`.
 
 ## Herkunft und Lizenz
 
