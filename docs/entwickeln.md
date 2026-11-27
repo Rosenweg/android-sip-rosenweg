@@ -13,6 +13,8 @@ Logo: Rosenweg-Wappen (Turm, Weg, Rose auf Rot) mit dem Zeichen der App rechts u
 
 Logo neu erzeugen (aus dem Repo-Wurzelverzeichnis, rosenweg-basis daneben): `sh assets/logo/erzeugen.sh`. Welches Zeichen die App trägt, steht in rosenweg-basis `werkzeug/logo/android-apps.txt`.
 
+**Fernwartung (rwtunnel):** `librwtunnel_jni.so` (arm64-v8a, x86_64) und `RwFernwartung.java` kommen aus Rosenweg/rosenweg-vm, `native/rwtunnel/jni`. Sie liegen gebaut im Repo, damit hier kein Go nötig ist. Erneuern: `werkzeuge/rwtunnel-holen.sh <pfad/zu/rosenweg-vm> [commit]` (braucht Go und das NDK, schreibt Commit und Prüfsummen nach `app/src/main/jniLibs/RWTUNNEL.txt`). Auf anderen Architekturen fehlt die Bibliothek; dann gibt es keine Fernwartung, sonst ändert sich nichts. Ablauf und Regeln: Rosenweg/Website `pbx/GETEILTE-TELEFONE.md`, Abschnitt „Fernwartung über den dauerhaften adb-Tunnel“.
+
 ## Schnittstellen für andere Apps
 
 - **Portal-Anfragen für die Flutter-Apps** (ab v236): `portal_anfrage` im Provider schickt Anfragen an die Rosenweg-API im Namen der angemeldeten Person über die Telefonanlage; die App selbst bekommt kein Token. Nur für Rosenweg-signierte Apps, mit Grössen- und Mengengrenzen.

@@ -99,6 +99,8 @@ Geräte nicht per `adb reboot` neu starten, solange jemand daran arbeitet. Einze
 | `…/rosenweg/Kontakte.java`, `Suchen.java` | Telefonbuch, Telefon suchen |
 | `…/rosenweg/Wlan.java`, `AdbFreigabe.java`, `AdbSelbst.java`, `Nachlauf.java` | WLAN, Wartung, Aufräumen nach dem Abmelden |
 | `…/rosenweg/RosenwegActivity.java`, `WebAppActivity.java`, `Sperrbild.java` | Startansicht, Web-Apps, Sperrbild |
+| `…/rosenweg/Fernwartung.java`, `FernwartungDienst.java`, `FernwartungBand.java` | Fernwartung: dauerhafter adb-Tunnel zur adb-zentrale, Band „Fernwartung aktiv“, Not-Aus |
+| `app/src/main/jniLibs/*/librwtunnel_jni.so`, `…/ch/rosenweg4303/rwtunnel/` | Telefonseite des Tunnels (rwtunnel aus Rosenweg/rosenweg-vm, WireGuard im Prozess); Herkunft in `jniLibs/RWTUNNEL.txt`, erneuern mit `werkzeuge/rwtunnel-holen.sh` |
 | `app/src/main/jni` (NDK) | native Codecs |
 | `assets/logo/` | Logo aus dem Baukasten von rosenweg-basis: Turm, Weg und Rose mit Telefon-Schloss-Plakette, dazu ein monochromes Designsymbol (Android 13+) |
 

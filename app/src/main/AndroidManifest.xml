@@ -222,12 +222,21 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Zeigt die Anmeldung am geteilten Telefon und bietet Abmelden an" />
         </service>
+        <!-- Fernwartung: dauerhafter adb-Tunnel zur adb-zentrale (rwtunnel im Prozess, kein VpnService) -->
+        <service android:name=".rosenweg.FernwartungDienst"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Haelt den Fernwartungs-Tunnel der Technik offen und zeigt jede laufende Sitzung an" />
+        </service>
 		<provider android:name="org.sipdroid.sipua.rosenweg.AnlageProvider"
 			android:authorities="ch.rosenweg4303.telefon.anlage"
 			android:exported="true"
 			android:readPermission="ch.rosenweg4303.permission.ANLAGE" />
     </application>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+	<!-- Band "Fernwartung aktiv" ueber allen Apps (appops im Einrichtungsskript) -->
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 	<uses-permission android:name="android.permission.CAMERA"/>
 	<uses-permission android:name="android.permission.NFC"/>
 	<!-- Beim Abmelden den gemeinsamen Speicher (Fotos, Downloads ...) leeren.

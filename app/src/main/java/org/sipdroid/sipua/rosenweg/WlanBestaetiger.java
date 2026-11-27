@@ -26,6 +26,7 @@ public class WlanBestaetiger extends AccessibilityService {
 		if (AdbSelbst.erwartetFreigabe(this)) schluesselFreigeben(AdbSelbst.eigenerFingerabdruck(this), false);
 		String dienst = AdbSelbst.dienstFingerabdruck(this);
 		if (!dienst.isEmpty()) schluesselFreigeben(dienst, true);
+		fernwartungRueckfrage();
 		if (!WlanDebug.erwartetBestaetigung(this)) return;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
 		if (wurzel == null) return;
@@ -69,35 +70,111 @@ public class WlanBestaetiger extends AccessibilityService {
 	 * die Bedienungshilfe nie.
 	 */
 	private void schluesselFreigeben(String fp, boolean dienst) {
-		if (fp.isEmpty()) return;
+		schluesselFreigeben(fp, dienst, dienst ? "Schluessel des adb-Updaters der Anlage" : "eigener adb-Schluessel von Rosenweg Geraet");
+	}
+
+	private boolean schluesselFreigeben(String fp, boolean dienst, String wer) {
+		if (fp.isEmpty()) return false;
 		AccessibilityNodeInfo wurzel = getRootInActiveWindow();
-		if (wurzel == null) return;
+		if (wurzel == null) return false;
 		boolean passt = false;
 		for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(fp.substring(0, 11))) {
 			CharSequence t = n.getText();
 			if (t != null && t.toString().toUpperCase(java.util.Locale.ROOT).contains(fp)) passt = true;
 		}
-		if (!passt) return;
+		if (!passt) return false;
 		// "Immer zulassen" ankreuzen. Samsung (A15: "Von diesem Computer immer zulassen" / "Erlauben")
 		// hat das Kaestchen als eigenes Element neben dem Text: das einzige ankreuzbare im Dialog.
 		AccessibilityNodeInfo kaestchen = ankreuzbar(wurzel);
-		if (kaestchen == null) return;   // Dialog noch nicht ganz aufgebaut, naechstes Ereignis
+		if (kaestchen == null) return false;   // Dialog noch nicht ganz aufgebaut, naechstes Ereignis
 		if (!kaestchen.isChecked()) {
 			kaestchen.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-			return;   // erst wenn das Ereignis "angekreuzt" kommt, auf Erlauben tippen
+			return false;   // erst wenn das Ereignis "angekreuzt" kommt, auf Erlauben tippen
 		}
 		for (String t : new String[]{"Erlauben", "Zulassen", "Allow", "OK"}) {
 			for (AccessibilityNodeInfo n : wurzel.findAccessibilityNodeInfosByText(t)) {
 				CharSequence txt = n.getText();
 				if (txt != null && txt.toString().trim().equalsIgnoreCase(t) && n.isClickable()) {
 					n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-					Log.i(TAG, (dienst ? "Schluessel des adb-Updaters der Anlage" : "eigener adb-Schluessel von Rosenweg Geraet")
-							+ " zugelassen (" + fp + ")");
+					Log.i(TAG, wer + " zugelassen (" + fp + ")");
 					if (dienst) AdbSelbst.dienstEnde(this);
-					return;
+					return true;
 				}
 			}
 		}
+		return false;
+	}
+
+
+	// ─── Fernwartung: nur bekannte Schluessel (Plan adb-tunnel-telefone 2.1) ─────────
+
+	private static final java.util.regex.Pattern FINGERABDRUCK = java.util.regex.Pattern.compile("([0-9A-F]{2}:){15}[0-9A-F]{2}");
+
+	/**
+	 * Solange die Fernwartung steht (adb dauerhaft an), gilt fuer "USB-Debugging zulassen?":
+	 *  - eigener Schluessel, Zentrale (adbz) und Updater: zulassen ("immer"),
+	 *  - jeder andere: "Ablehnen" tippen und der Anlage melden (Verlauf, NOC rot).
+	 * Ausnahme Wartung vor Ort: ist auf /smartphones "1 Std." an (z. B. Mac am USB), bleibt die
+	 * Rueckfrage fuer den Menschen stehen und wird nur gemeldet. Nur Dialoge der SystemUI.
+	 */
+	private void fernwartungRueckfrage() {
+		if (!Fernwartung.adbDauerhaft(this)) return;
+		AccessibilityNodeInfo w = getRootInActiveWindow();
+		if (w == null || w.getPackageName() == null || !"com.android.systemui".contentEquals(w.getPackageName())) return;
+		String fp = fingerabdruckIm(w, 0);
+		if (fp == null) return;
+		if (Fernwartung.erlaubteSchluessel(this).contains(fp)) {
+			if (schluesselFreigeben(fp, false, "bekannter Schluessel (Fernwartung)")) {
+				Fernwartung.zugelassen(this, fp);
+				AdbSelbst.rueckfrageEnde(this);
+			}
+			return;
+		}
+		boolean vorOrt = WlanDebug.zentralAn(this);
+		if (!vorOrt && !tippe(w, "Ablehnen", "Abbrechen", "Nicht zulassen", "Verweigern", "Deny", "Cancel")) return;
+		fremdMelden(fp, !vorOrt);
+	}
+
+	private static String fingerabdruckIm(AccessibilityNodeInfo n, int tiefe) {
+		if (n == null || tiefe > 12) return null;
+		CharSequence t = n.getText();
+		if (t != null) {
+			java.util.regex.Matcher m = FINGERABDRUCK.matcher(t.toString().toUpperCase(java.util.Locale.ROOT));
+			if (m.find()) return m.group();
+		}
+		for (int i = 0; i < n.getChildCount(); i++) {
+			String f = fingerabdruckIm(n.getChild(i), tiefe + 1);
+			if (f != null) return f;
+		}
+		return null;
+	}
+
+	private static boolean tippe(AccessibilityNodeInfo w, String... texte) {
+		for (String t : texte) {
+			for (AccessibilityNodeInfo n : w.findAccessibilityNodeInfosByText(t)) {
+				CharSequence txt = n.getText();
+				if (txt != null && txt.toString().trim().equalsIgnoreCase(t) && n.isClickable()) {
+					n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private void fremdMelden(String fp, boolean abgelehnt) {
+		android.content.SharedPreferences p = Fernwartung.prefs(this);
+		if (fp.equals(p.getString("fremd_fp", "")) && System.currentTimeMillis() - p.getLong("fremd_um", 0) < 600_000) return;
+		p.edit().putString("fremd_fp", fp).putLong("fremd_um", System.currentTimeMillis()).apply();
+		Log.w(TAG, "fremde adb-Rueckfrage " + fp + (abgelehnt ? " abgelehnt" : " offen gelassen (Wartung vor Ort)"));
+		final android.content.Context app = getApplicationContext();
+		new Thread(() -> {
+			try {
+				Anlage.fremdenSchluesselMelden(app, fp, abgelehnt);
+			} catch (Exception e) {
+				Log.w(TAG, "fremde Rueckfrage melden: " + e.getClass().getSimpleName());
+			}
+		}, "FremdMelden").start();
 	}
 
 	private static AccessibilityNodeInfo ankreuzbar(AccessibilityNodeInfo n) {

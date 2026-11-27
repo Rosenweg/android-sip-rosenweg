@@ -1,0 +1,5 @@
+librwtunnel_jni.so aus Rosenweg/rosenweg-vm native/rwtunnel (jni/), GPL-3.0-or-later
+Commit: fbcb589841b84a05c97578ff37a2c0302f2aadf9
+Gebaut: 2026-11-27T19:44:25Z mit go version go1.27.4 darwin/arm64
+bd02e3e54fb62e960fda1795325e46b866cd222be077813e2bf3e668a760bff7  arm64-v8a/librwtunnel_jni.so
+386660a3f2daba9f7d4b139ade18d211ed5e6e5027e2f42d0857ad7715003c4a  x86_64/librwtunnel_jni.so
