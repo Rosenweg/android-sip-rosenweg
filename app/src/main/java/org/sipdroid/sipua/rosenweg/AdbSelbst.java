@@ -294,6 +294,41 @@ public class AdbSelbst {
 		systemUiZulassen(c, false);
 	}
 
+	// ─── Fernwartung: erste Verbindung der Zentrale sichtbar machen ───────────
+
+	private static android.os.PowerManager.WakeLock fwWach;
+
+	/**
+	 * Die Zentrale (oder der Updater) verbindet sich durch den Tunnel, ihr Schluessel ist auf
+	 * diesem Telefon aber noch nicht zugelassen: Android fragt "USB-Debugging zulassen?" - nur
+	 * bei eingeschaltetem Bildschirm und im Kiosk nur mit zugelassener SystemUI. Beides fuer ms
+	 * Millisekunden; die Bedienungshilfe bestaetigt nur bekannte Fingerabdruecke.
+	 */
+	static synchronized void rueckfrageErmoeglichen(Context c, long ms) {
+		final Context app = c.getApplicationContext();
+		systemUiZulassen(app, true);
+		try {
+			if (fwWach == null) {
+				@SuppressWarnings("deprecation")
+				android.os.PowerManager.WakeLock w = app.getSystemService(android.os.PowerManager.class).newWakeLock(
+						android.os.PowerManager.SCREEN_DIM_WAKE_LOCK | android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,
+						"Rosenweg:FernwartungRueckfrage");
+				fwWach = w;
+				fwWach.acquire(ms);
+			}
+		} catch (Exception e) {
+			Log.w(TAG, "wecken: " + e.getClass().getSimpleName());
+		}
+		new Handler(Looper.getMainLooper()).postDelayed(() -> rueckfrageEnde(app), ms);
+	}
+
+	static synchronized void rueckfrageEnde(Context c) {
+		if (fwWach == null) return;
+		try { if (fwWach.isHeld()) fwWach.release(); } catch (Exception ignored) { }
+		fwWach = null;
+		systemUiZulassen(c, false);
+	}
+
 	// ─── Einstellungen, die nur adb setzen darf, selbst pruefen ───────────────
 
 	/**
@@ -344,6 +379,7 @@ public class AdbSelbst {
 	public static synchronized String tcpWiederherstellen(Context c) {
 		if (WlanDebug.tcpOffen()) return null;
 		if (!Sperre.istDeviceOwner(c)) return "nicht moeglich: kein Device Owner";
+		if (Fernwartung.notAus(c)) return "nicht moeglich: Fernwartung per Not-Aus aus";
 		if (!freigegeben(c)) return "nicht moeglich: eigener Schluessel noch nicht freigegeben (Einrichtungsskript)";
 		if (WlanDebug.adresse(c).isEmpty()) return "kein WLAN";
 		boolean adbVorher = WlanDebug.an(c);
@@ -377,7 +413,7 @@ public class AdbSelbst {
 		}
 		boolean offen = WlanDebug.tcpOffen();
 		// zentral nicht an: adb wieder wie vorher (der Port gilt beim naechsten Einschalten)
-		if (!adbVorher && !WlanDebug.zentralAn(c)) {
+		if (!adbVorher && !WlanDebug.zentralAn(c) && !Fernwartung.adbDauerhaft(c)) {
 			try { Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), Settings.Global.ADB_ENABLED, "0"); } catch (Exception ignored) { }
 		}
 		if (offen) {

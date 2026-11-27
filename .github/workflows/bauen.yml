@@ -1,0 +1,40 @@
+# Pruefbau fuer Pull Requests: Debug-APK bauen (ohne Rosenweg-Schluessel, nicht an /apps).
+# Oeffentliches Repo: GitHub-Runner. commons-rosenweg (anmeldeschirm) kommt aus GitHub Packages
+# mit dem Token des Laufs (build.gradle: GITHUB_ACTOR / GITHUB_TOKEN).
+name: Bauen
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: bauen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fernwartung-Bibliothek vorhanden und unveraendert (RWTUNNEL.txt)
+        run: |
+          cd app/src/main/jniLibs
+          grep -E '^[0-9a-f]{64}  ' RWTUNNEL.txt | sha256sum -c -
+      - name: Debug-APK
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./gradlew --no-daemon assembleDebug
+      - name: rwtunnel in der APK
+        run: |
+          for abi in arm64-v8a x86_64; do
+            unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q "lib/$abi/librwtunnel_jni.so"
+          done
