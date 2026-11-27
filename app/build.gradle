@@ -10,8 +10,8 @@ android {
         // 21: natives Multidex (zxing sprengt sonst die 64K-Grenze), Device-Owner-APIs
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 245
-        versionName "1.4-rosenweg.79"
+        versionCode 246
+        versionName "1.4-rosenweg.80"
     }
 
     signingConfigs {

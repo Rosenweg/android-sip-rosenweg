@@ -24,6 +24,14 @@ import android.util.Log;
  *   adb shell am broadcast -a ch.rosenweg4303.telefon.ADB_NEBENSTELLE --es ext 2102 \
  *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe
  *
+ * Erstes Einrichten ohne SIP-Einstellungsseite (die ist als Device Owner nicht erreichbar):
+ * Nebenstelle und SIP-Passwort setzen, wie der Import von androidsip-<ext>.xml (pbx-admin).
+ * Das Passwort kommt ueber stdin der adb-Shell, nie auf die Kommandozeile des Rechners
+ * (scripts/geteiltes-telefon-einrichten.sh --nebenstelle, Website-Repo):
+ *   ... | adb shell 'read -r pw; am broadcast -a ch.rosenweg4303.telefon.ADB_ZUGANG \
+ *       --es ext 2101 --es pw "$pw" [--es server sip.rosenweg4303.ch] \
+ *       -n ch.rosenweg4303.telefon/org.sipdroid.sipua.rosenweg.AdbFreigabe'
+ *
  * Geschuetzt durch android.permission.DUMP: die hat die adb-Shell, normale
  * Apps bekommen sie nicht. Wer das senden kann, hat ohnehin USB-Debugging
  * und das Geraet in der Hand.
@@ -33,6 +41,8 @@ public class AdbFreigabe extends BroadcastReceiver {
 	static final String INSTALLATION = "ch.rosenweg4303.telefon.ADB_INSTALLATION";
 	static final String INSTALLATION_ENDE = "ch.rosenweg4303.telefon.ADB_INSTALLATION_ENDE";
 	static final String NEBENSTELLE = "ch.rosenweg4303.telefon.ADB_NEBENSTELLE";
+	/** Erstes Einrichten: Nebenstelle + SIP-Passwort (+ Server), v246. */
+	static final String ZUGANG = "ch.rosenweg4303.telefon.ADB_ZUGANG";
 	/** C: eigenen adb-Schluessel einmal freigeben (Einrichtungsskript, Port 5555 offen). */
 	static final String SELBST_FREIGEBEN = "ch.rosenweg4303.telefon.ADB_SELBST_FREIGEBEN";
 	/** C zum Testen: Port 5555 jetzt selbst wiederherstellen. */
@@ -62,6 +72,37 @@ public class AdbFreigabe extends BroadcastReceiver {
 			org.sipdroid.sipua.ui.Receiver.engine(c).halt();
 			org.sipdroid.sipua.ui.Receiver.engine(c).StartEngine();
 			Log.i("RosenwegKatalog", "Nebenstelle per adb umgestellt auf " + ext);
+			return;
+		}
+		if (ZUGANG.equals(i.getAction())) {
+			String ext = i.getStringExtra("ext");
+			String pw = i.getStringExtra("pw");
+			String server = i.getStringExtra("server");
+			if (server == null || server.isEmpty()) server = "sip.rosenweg4303.ch";
+			if (ext == null || !ext.matches("[0-9]{2,8}") || pw == null || pw.isEmpty()
+					|| !server.matches("[A-Za-z0-9.-]{1,253}")) {
+				Log.w("RosenwegKatalog", "ADB_ZUGANG: Nebenstelle, Passwort oder Server ungueltig");
+				return;
+			}
+			// dieselben Werte wie androidsip-<ext>.xml aus pbx/api/app.py (_androidsip_xml)
+			Anlage.prefs(c).edit()
+					.putBoolean(org.sipdroid.sipua.ui.Settings.PREF_ENABLED, true)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_USERNAME, ext)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_PASSWORD, pw)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_SERVER, server)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_DOMAIN, server)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_PORT, "5060")
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_PROTOCOL, "tcp")
+					.putBoolean(org.sipdroid.sipua.ui.Settings.PREF_WLAN, true)
+					.putBoolean(org.sipdroid.sipua.ui.Settings.PREF_VPN, true)
+					.putString(org.sipdroid.sipua.ui.Settings.PREF_PREF, "SIP")
+					.putBoolean(org.sipdroid.sipua.ui.Settings.PREF_MWI_ENABLED, false)
+					.commit();
+			org.sipdroid.sipua.ui.Receiver.engine(c).halt();
+			org.sipdroid.sipua.ui.Receiver.engine(c).StartEngine();
+			// Passwort nie ins Log
+			Log.i("RosenwegKatalog", "Zugang per adb eingerichtet: Nebenstelle " + ext + " an " + server);
+			Katalog.vielleichtAbgleichen(c, true);
 			return;
 		}
 		if (ABGLEICH.equals(i.getAction())) {
