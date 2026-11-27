@@ -16,7 +16,8 @@ import org.sipdroid.sipua.R;
 /**
  * Android-Sperrbildschirm wie der Ladebildschirm der Stationen (Stefan 25.11.2026):
  * blauer Hintergrund, Rosenweg-Logo in der Mitte. Nur das Sperrbild (FLAG_LOCK), der
- * Startbildschirm gehoert dem Rosenweg Launcher. Angemeldet: Logo der Gruppe/des Hauses
+ * Startbildschirm gehoert der Person (Hintergrund). Aendert jemand das Sperrbild, setzt
+ * pruefen() sofort wieder das Logo. Angemeldet: Logo der Gruppe/des Hauses
  * (Anlage entscheidet), abgemeldet: Rosenweg-Logo.
  */
 public final class Sperrbild {
@@ -53,29 +54,83 @@ public final class Sperrbild {
 		if (soll.equals(laeuft)) return;   // wird gerade gesetzt (Status kommt mehrfach)
 		laeuft = soll;
 		new Thread(() -> {
-			synchronized (Sperrbild.class) {
-				try {
-					Bitmap logo = soll.isEmpty() || soll.equals("logo-rosenweg.png") ? null : laden(app, soll);
-					if (logo == null) logo = BitmapFactory.decodeResource(app.getResources(), R.drawable.rosenweg_logo);
-					DisplayMetrics dm = app.getResources().getDisplayMetrics();
-					int b = Math.min(dm.widthPixels, dm.heightPixels), h = Math.max(dm.widthPixels, dm.heightPixels);
-					Bitmap bild = Bitmap.createBitmap(b, h, Bitmap.Config.ARGB_8888);
-					Canvas cv = new Canvas(bild);
-					cv.drawColor(BLAU);
-					int breite = (int) (b * 0.6f);
-					int hoehe = breite * logo.getHeight() / logo.getWidth();
-					int x = (b - breite) / 2, y = (h - hoehe) / 2;
-					cv.drawBitmap(logo, null, new Rect(x, y, x + breite, y + hoehe), new Paint(Paint.FILTER_BITMAP_FLAG));
-					WallpaperManager.getInstance(app).setBitmap(bild, null, true, WallpaperManager.FLAG_LOCK);
-					p.edit().putInt("version", VERSION).putString("datei", soll).apply();
-					Log.i(TAG, "Sperrbild gesetzt: " + (soll.isEmpty() ? "Rosenweg" : soll));
-				} catch (Exception e) {
-					Log.w(TAG, "Sperrbild: " + e);
-				} finally {
-					laeuft = null;
-				}
+			try {
+				setzenJetzt(app, soll);
+			} finally {
+				laeuft = null;
 			}
 		}, "Sperrbild").start();
+	}
+
+	/**
+	 * Logo zeichnen und als Sperrbild (nur FLAG_LOCK) setzen. Blockiert (Netz fuer das Logo).
+	 * Merkt sich die Sperrbild-ID, wie Android sie danach meldet (nicht den Rueckgabewert: der
+	 * passt bei manchen Herstellern nicht zu getWallpaperId - sonst setzte pruefen() endlos neu).
+	 */
+	private static boolean setzenJetzt(Context app, String soll) {
+		android.content.SharedPreferences p = prefs(app);
+		Bitmap logo = soll.isEmpty() || soll.equals("logo-rosenweg.png") ? null : laden(app, soll);
+		synchronized (Hintergrund.WALLPAPER) {
+			try {
+				if (logo == null) logo = BitmapFactory.decodeResource(app.getResources(), R.drawable.rosenweg_logo);
+				DisplayMetrics dm = app.getResources().getDisplayMetrics();
+				int b = Math.min(dm.widthPixels, dm.heightPixels), h = Math.max(dm.widthPixels, dm.heightPixels);
+				Bitmap bild = Bitmap.createBitmap(b, h, Bitmap.Config.ARGB_8888);
+				Canvas cv = new Canvas(bild);
+				cv.drawColor(BLAU);
+				int breite = (int) (b * 0.6f);
+				int hoehe = breite * logo.getHeight() / logo.getWidth();
+				int x = (b - breite) / 2, y = (h - hoehe) / 2;
+				cv.drawBitmap(logo, null, new Rect(x, y, x + breite, y + hoehe), new Paint(Paint.FILTER_BITMAP_FLAG));
+				WallpaperManager wm = WallpaperManager.getInstance(app);
+				int systemVorher = wm.getWallpaperId(WallpaperManager.FLAG_SYSTEM);
+				wm.setBitmap(bild, null, true, WallpaperManager.FLAG_LOCK);
+				int lock = wm.getWallpaperId(WallpaperManager.FLAG_LOCK);
+				Hintergrund.systemIdNachSperrbild(app, systemVorher, wm.getWallpaperId(WallpaperManager.FLAG_SYSTEM));
+				p.edit().putInt("version", VERSION).putString("datei", soll).putInt("lock_id", lock).apply();
+				Log.i(TAG, "Sperrbild gesetzt: " + (soll.isEmpty() ? "Rosenweg" : soll) + " (ID " + lock + ")");
+				return true;
+			} catch (Exception e) {
+				Log.w(TAG, "Sperrbild: " + e);
+				return false;
+			}
+		}
+	}
+
+	/** Hoechstens 3 erzwungene Sperrbilder je 10 Minuten (falls ein Hersteller die ID nie stehen laesst). */
+	private static final HintergrundRegel.Bremse BREMSE = new HintergrundRegel.Bremse(3, 10 * 60_000L);
+
+	/**
+	 * Das Sperrbild gehoert Rosenweg Geraet (Stefan 27.11.2026): hat es jemand anderes geaendert
+	 * (Galerie/Einstellungen "Sperrbildschirm" oder "Start- und Sperrbildschirm" - dann teilen
+	 * sich beide ein Bild, auf Samsung mWhich=0x5), sofort wieder das richtige Logo als eigenes
+	 * Sperrbild setzen, an der gemerkten Datei vorbei. Aus Hintergrund (Faden "Hintergrund").
+	 */
+	static void pruefen(Context c) {
+		Context app = c.getApplicationContext();
+		if (android.os.Build.VERSION.SDK_INT < 24) return;
+		synchronized (Hintergrund.WALLPAPER) {
+			if (laeuft != null) return;   // fuer() setzt gerade selbst
+			WallpaperManager wm = WallpaperManager.getInstance(app);
+			int lock = wm.getWallpaperId(WallpaperManager.FLAG_LOCK);
+			int system = wm.getWallpaperId(WallpaperManager.FLAG_SYSTEM);
+			int eigen = prefs(app).getInt("lock_id", Integer.MIN_VALUE);
+			if (!HintergrundRegel.sperrbildFremd(lock, eigen, system)) return;
+			boolean geteilt = lock <= 0 || lock == system;
+			if (!BREMSE.darf(System.currentTimeMillis())) {
+				Log.w(TAG, "Sperrbild fremd (lock " + lock + ", eigen " + eigen + ", system " + system
+						+ "), Schleifenschutz: erst in 10 Minuten wieder");
+				return;
+			}
+			Log.i(TAG, "Sperrbild von aussen geaendert (lock " + lock + ", eigen " + eigen + ", system " + system
+					+ (geteilt ? ", mit dem Startbildschirm geteilt" : "") + "): Logo wieder als eigenes Sperrbild");
+			String datei = prefs(app).getString("datei", "");
+			if (!setzenJetzt(app, datei == null ? "" : datei)) return;
+			int danach = wm.getWallpaperId(WallpaperManager.FLAG_LOCK);
+			if (danach <= 0 || danach == wm.getWallpaperId(WallpaperManager.FLAG_SYSTEM)) {
+				Log.w(TAG, "Sperrbild nach dem Setzen weiterhin geteilt (lock " + danach + ")");
+			}
+		}
 	}
 
 	/** Logo aus dem Zwischenspeicher oder von der Website (nur www.rosenweg4303.ch). */

@@ -30,6 +30,8 @@ public class SipdroidApp extends Application implements SharedPreferences.OnShar
         // Rosenweg: "Debugging ueber WLAN" sofort wieder einschalten, wenn Android es beim
         // WLAN-Wechsel (auch 2,4 -> 5 GHz am selben Zugangspunkt) abstellt
         org.sipdroid.sipua.rosenweg.WlanDebug.beobachten(this);
+        // Rosenweg: Hintergrund der Person hochladen, fremdes Sperrbild sofort ersetzen
+        org.sipdroid.sipua.rosenweg.Hintergrund.beobachten(this);
         // Rosenweg: beim Herunterfahren sperren, damit nach dem Neustart sofort der
         // Sperrbildschirm statt des Launchers der Person kommt (jede Sitzung endet beim Neustart)
         org.sipdroid.sipua.rosenweg.Neustart.beobachten(this);

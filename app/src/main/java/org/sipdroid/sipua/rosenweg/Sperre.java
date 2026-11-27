@@ -190,6 +190,7 @@ public final class Sperre {
 					android.Manifest.permission.CALL_PHONE,
 					"android.permission.BLUETOOTH_CONNECT",
 					"android.permission.POST_NOTIFICATIONS",
+					"android.permission.READ_MEDIA_IMAGES",       // Android 13: Hintergrund lesen (Hintergrund)
 			};
 			for (String r : rechte) {
 				try {
@@ -360,6 +361,7 @@ public final class Sperre {
 		WlanDebug.sitzungEnde(c);   // Kachel-Debugging nie ueber die Sitzung hinaus (zentral bleibt)
 		sperrbildschirmText(c);
 		Sperrbild.fuer(c, "");    // zurueck auf das Rosenweg-Logo
+		Hintergrund.abgemeldet(c); // Startbildschirm: zurueck auf den Standard
 		Katalog.sperren(c);       // Apps verstecken, persoenliche Daten + Web-Sitzungen loeschen
 		startseite(c, "abmelden"); // Rosenweg Launcher: zurueck auf den Standard
 		einstellungenSperren(c, false); // gesperrt schuetzt der Lock-Task; adb fuer Wartung offen

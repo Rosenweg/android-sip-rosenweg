@@ -40,6 +40,7 @@ public class StartReceiver extends BroadcastReceiver {
 		Fernwartung.nachStart(c);
 		Sperre.grundregeln(c);
 		Sperrbild.setzen(c);
+		Hintergrund.beobachten(c);
 		if (!neustartGesperrt && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
 				&& !Bildschirmsperre.abmeldungAusstehend(c)) {
 			// Update der Geraete-App waehrend jemand angemeldet ist: nicht abmelden,

@@ -181,6 +181,8 @@ public final class Anlage {
 		}
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
+		// Startbildschirm-Hintergrund der Person (folgt ihr auf jedes geteilte Telefon)
+		Hintergrund.ausStatus(c, s);
 		// Fernwartung (dauerhafter adb-Tunnel, pbx/adb-zentrale) vor der Wartung: Not-Aus und
 		// "adb dauerhaft" muessen gelten, bevor WlanDebug ein- oder ausschaltet
 		JSONObject fw = s.optJSONObject("fernwartung");
@@ -327,6 +329,64 @@ public final class Anlage {
 				byte[] puffer = new byte[65536];
 				int n;
 				while ((n = in.read(puffer)) > 0) o.write(puffer, 0, n);
+			}
+		} finally {
+			v.disconnect();
+		}
+	}
+
+	/**
+	 * GET /api/telefon/hintergrund: Hintergrund der angemeldeten Person als JPEG, null = keiner
+	 * (Standard). AnlageFehler 409: niemand angemeldet.
+	 */
+	public static byte[] hintergrundHolen(Context c) throws Exception {
+		return roh(c, "GET", "/api/telefon/hintergrund", null, 2_000_000);
+	}
+
+	/** PUT /api/telefon/hintergrund (image/jpeg) -> {ok, version} */
+	public static JSONObject hintergrundSenden(Context c, byte[] jpeg) throws Exception {
+		return new JSONObject(new String(roh(c, "PUT", "/api/telefon/hintergrund", jpeg, 64 * 1024), StandardCharsets.UTF_8));
+	}
+
+	/** Rohdaten hin/her mit dem Geraetezugang; GET mit 404 -> null. */
+	private static byte[] roh(Context c, String methode, String pfad, byte[] koerper, int maxAntwort) throws Exception {
+		SharedPreferences p = prefs(c);
+		String zugang = p.getString(Settings.PREF_USERNAME, "") + ":" + p.getString(Settings.PREF_PASSWORD, "");
+		HttpURLConnection v = (HttpURLConnection) new URL(p.getString(PREF_API, API_STANDARD) + pfad).openConnection();
+		try {
+			v.setRequestMethod(methode);
+			v.setConnectTimeout(8000);
+			v.setReadTimeout(30000);
+			v.setUseCaches(false);
+			v.setRequestProperty("Authorization", "Basic "
+					+ Base64.encodeToString(zugang.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
+			int boot = Neustart.bootZahl(c);
+			if (boot >= 0) v.setRequestProperty("X-Rosenweg-Boot", String.valueOf(boot));
+			if (koerper != null) {
+				v.setDoOutput(true);
+				v.setFixedLengthStreamingMode(koerper.length);
+				v.setRequestProperty("Content-Type", "image/jpeg");
+				try (OutputStream o = v.getOutputStream()) {
+					o.write(koerper);
+				}
+			}
+			int code = v.getResponseCode();
+			if (code == 404 && "GET".equals(methode)) return null;
+			if (code >= 400) {
+				String fehler = "HTTP " + code;
+				try {
+					fehler = new JSONObject(lies(v.getErrorStream())).optString("error", fehler);
+				} catch (Exception ignored) {}
+				throw new AnlageFehler(code, fehler);
+			}
+			try (InputStream in = v.getInputStream(); ByteArrayOutputStream b = new ByteArrayOutputStream()) {
+				byte[] puffer = new byte[16384];
+				int n;
+				while ((n = in.read(puffer)) > 0) {
+					if (b.size() + n > maxAntwort) throw new Exception("Antwort zu gross");
+					b.write(puffer, 0, n);
+				}
+				return b.toByteArray();
 			}
 		} finally {
 			v.disconnect();
