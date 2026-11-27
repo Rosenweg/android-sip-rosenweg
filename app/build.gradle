@@ -62,7 +62,7 @@ android {
         implementation 'com.google.zxing:core:3.5.3'
         // Aussehen, Texte und Kartenleser des Sperrbildschirms, gemeinsam mit dem Anmeldeschirm der
         // Rosenweg-Apps (commons-rosenweg, Modul anmeldeschirm; lokal: publishToMavenLocal)
-        implementation 'ch.rosenweg4303:anmeldeschirm:0.1.0'
+        implementation 'ch.rosenweg4303:anmeldeschirm:0.2.1'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     }
 }
