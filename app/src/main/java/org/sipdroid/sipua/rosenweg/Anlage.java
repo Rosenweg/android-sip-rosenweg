@@ -181,12 +181,27 @@ public final class Anlage {
 		}
 		Sperre.sperrbildschirmText(c);
 		Sperrbild.fuer(c, s.optBoolean("angemeldet", false) ? s.optString("sperrbild", "") : "");
+		// Fernwartung (dauerhafter adb-Tunnel, pbx/adb-zentrale) vor der Wartung: Not-Aus und
+		// "adb dauerhaft" muessen gelten, bevor WlanDebug ein- oder ausschaltet
+		JSONObject fw = s.optJSONObject("fernwartung");
+		if (fw != null) Fernwartung.anlageStand(c, fw);
 		if (s.has("wlan_debug_bis")) WlanDebug.zentral(c, s.optLong("wlan_debug_bis", 0));
 		// adb-Updater der Anlage einmal zulassen (/smartphones "Updater zulassen", v237)
 		JSONObject dienst = s.optJSONObject("adb_dienst");
 		if (dienst != null) AdbSelbst.dienstErwarten(c, dienst.optString("fingerabdruck", ""), dienst.optLong("bis", 0));
 		Wlan.vielleicht(c, s.optBoolean("angemeldet", false));
 		return s;
+	}
+
+	/** POST /api/telefon/tunnel {pubkey} -> wie das Feld "fernwartung" im Status. */
+	public static JSONObject tunnelMelden(Context c, String pubkey) throws Exception {
+		return anfrage(c, "POST", "/api/telefon/tunnel", new JSONObject().put("pubkey", pubkey).toString());
+	}
+
+	/** POST /api/telefon/fernwartung/meldung: fremde adb-Rueckfrage (abgelehnt oder vor Ort offen gelassen). */
+	public static void fremdenSchluesselMelden(Context c, String fingerabdruck, boolean abgelehnt) throws Exception {
+		anfrage(c, "POST", "/api/telefon/fernwartung/meldung", new JSONObject().put("art", "fremder_schluessel")
+				.put("fingerabdruck", fingerabdruck).put("abgelehnt", abgelehnt).toString());
 	}
 
 	/** POST /api/telefon/adb {adresse, port}: Debug-Port fuer "adb connect" auf /smartphones (0 = aus). */

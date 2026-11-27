@@ -135,6 +135,8 @@ public class WlanDebug extends BroadcastReceiver {
 
 	static String einschalten(Context c, long dauerMs) {
 		if (!Sperre.istDeviceOwner(c)) return "Rosenweg Gerät ist nicht Geräteverwalter";
+		// Not-Aus der Fernwartung (/smartphones): adb bleibt aus, bis dort "ein" kommt
+		if (Fernwartung.notAus(c)) return "Fernwartung ist per Not-Aus ausgeschaltet (/smartphones)";
 		// Bestaetigt wird automatisch nur im WLAN "Rosenweg" (WlanBestaetiger); in anderen WLANs
 		// fragt Android und jemand muss am Telefon von Hand zulassen (Stefan 25.11.2026).
 		prefs(c).edit().putLong("eingeschaltet_um", System.currentTimeMillis())
@@ -156,6 +158,13 @@ public class WlanDebug extends BroadcastReceiver {
 	public static void ausschalten(Context c) {
 		try {
 			c.getSystemService(AlarmManager.class).cancel(ausIntent(c));
+			// Fernwartung bereit: adb bleibt dauerhaft an (Tunnel), nur die befristete Wartung endet
+			if (Fernwartung.adbDauerhaft(c)) {
+				c.getSystemService(AlarmManager.class).cancel(pruefIntent(c));
+				melden(c, "", 0);
+				Log.i(TAG, "Wartung zu Ende, adb bleibt fuer die Fernwartung an");
+				return;
+			}
 			if (Sperre.istDeviceOwner(c) && an(c)) {
 				Sperre.dpm(c).setGlobalSetting(Sperre.admin(c), Settings.Global.ADB_ENABLED, "0");
 				Log.i(TAG, "adb aus");
@@ -224,6 +233,20 @@ public class WlanDebug extends BroadcastReceiver {
 		beobachter = new android.database.ContentObserver(h) {
 			@Override
 			public void onChange(boolean selbst) {
+				if (Fernwartung.adbDauerhaft(app) && !an(app)) {
+					// Fernwartung: adb ist dauerhaft an - wer es abschaltet, bekommt es zurueck
+					h.postDelayed(() -> {
+						if (an(app) || !Fernwartung.adbDauerhaft(app) || !Sperre.istDeviceOwner(app)) return;
+						try {
+							Sperre.dpm(app).setGlobalSetting(Sperre.admin(app), Settings.Global.ADB_ENABLED, "1");
+							Log.i(TAG, "adb war aus, fuer die Fernwartung wieder an");
+							tcpPruefen(app, 8_000);
+						} catch (Exception e) {
+							Log.w(TAG, "adb wieder an: " + e.getClass().getSimpleName());
+						}
+					}, 3000);
+					return;
+				}
 				long bis = prefs(app).getLong("zentral_bis", 0);
 				if (bis <= System.currentTimeMillis() / 1000) return;
 				if (an(app)) {
@@ -254,7 +277,7 @@ public class WlanDebug extends BroadcastReceiver {
 		final Context app = c.getApplicationContext();
 		new Thread(() -> {
 			try { Thread.sleep(warteMs); } catch (InterruptedException e) { return; }
-			if (!zentralAn(app) || !an(app) || tcpOffen()) return;
+			if ((!zentralAn(app) && !Fernwartung.adbDauerhaft(app)) || !an(app) || tcpOffen()) return;
 			String f = AdbSelbst.tcpWiederherstellen(app);
 			Log.i(TAG, "Port " + TCP_PORT + " war zu: " + (f == null ? "wiederhergestellt" : f));
 		}, "TcpPruefen").start();
