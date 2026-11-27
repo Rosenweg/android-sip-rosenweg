@@ -39,6 +39,9 @@ import com.journeyapps.barcodescanner.camera.CameraSettings;
 
 import org.json.JSONObject;
 
+import ch.rosenweg4303.anmeldeschirm.AnmeldeOberflaeche;
+import ch.rosenweg4303.anmeldeschirm.Kartenleser;
+
 import java.util.Collections;
 
 /**
@@ -51,6 +54,10 @@ import java.util.Collections;
  * Oder: die eigene Rosenweg-Karte (UniFi Access, dieselbe wie fuer die Tueren) hinten
  * ans Telefon halten. Solange der Sperrbildschirm vorne ist, liest er Karten selbst im
  * Reader-Modus (NfcKarte.anmelden).
+ *
+ * Aussehen, Texte, Schritt-Zeilen und Kartenleser kommen aus commons-rosenweg (Modul
+ * anmeldeschirm, AnmeldeOberflaeche/Kartenleser) - derselbe Baustein zeigt auf privaten Handys
+ * den Anmeldeschirm der Rosenweg-Apps (Stefan 26.11.2026).
  */
 public class SperrActivity extends Activity {
 	private static final String TAG = "RosenwegSperre";
@@ -229,7 +236,8 @@ public class SperrActivity extends Activity {
 	// Pflicht-Schritt gescheitert: anhalten, rot mit Ursache, "Nochmals versuchen" (ab diesem
 	// Schritt) und beim Anmelden "Abbrechen". Andere Schritte: gelb mit Ursache und weiter.
 
-	static final int LAEUFT = 0, OK = 1, FEHLER = 2, WARNUNG = 3;
+	static final int LAEUFT = AnmeldeOberflaeche.LAEUFT, OK = AnmeldeOberflaeche.OK,
+			FEHLER = AnmeldeOberflaeche.FEHLER, WARNUNG = AnmeldeOberflaeche.WARNUNG;
 
 	/** Ergebnis eines Schritts. danach != null: Ablauf hier still beenden und das ausfuehren (UI-Thread). */
 	static final class Ergebnis {
@@ -344,11 +352,7 @@ public class SperrActivity extends Activity {
 			schrittListe.removeAllViews();
 			schrittZeilen.clear();
 			for (String t : schritte) {
-				TextView z = text(17, Color.parseColor("#BFDBFE"), false);
-				z.setGravity(Gravity.START);
-				z.setPadding(0, dp(5), 0, dp(5));
-				z.setText("○  " + t);
-				z.setTag(t);
+				TextView z = AnmeldeOberflaeche.schrittZeile(this, t);
 				schrittListe.addView(z);
 				schrittZeilen.add(z);
 			}
@@ -370,13 +374,7 @@ public class SperrActivity extends Activity {
 		runOnUiThread(() -> {
 			if (i < 0 || i >= schrittZeilen.size()) return;
 			TextView z = schrittZeilen.get(i);
-			String t = (String) z.getTag();
-			String zeichen = stand == LAEUFT ? "⏳" : stand == OK ? "✓" : stand == WARNUNG ? "⚠" : "✗";
-			int farbe = stand == LAEUFT ? Color.WHITE : stand == OK ? Color.parseColor("#BBF7D0")
-					: stand == WARNUNG ? Color.parseColor("#FDE68A") : Color.parseColor("#FCA5A5");
-			z.setText(zeichen + "  " + t + (erklaerung == null || erklaerung.isEmpty() ? "" : "\n     " + erklaerung));
-			z.setTextColor(farbe);
-			z.setTypeface(null, stand == LAEUFT ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+			AnmeldeOberflaeche.schrittStand(z, stand, erklaerung);
 			// aktuelle Zeile sichtbar halten (8 Schritte mit Erklaerungen passen nicht immer)
 			schrittRahmen.post(() -> schrittRahmen.smoothScrollTo(0, Math.max(0, z.getTop() - dp(60))));
 		});
@@ -410,7 +408,7 @@ public class SperrActivity extends Activity {
 
 	/** Anmeldung gescheitert (Karte/QR): Schritt rot, nach 8 s zurueck zum Sperrbildschirm. */
 	private void anmeldungFehler(int schrittNr, String meldungText) {
-		schritt(schrittNr, FEHLER, meldungText + " – bitte nochmals versuchen.");
+		schritt(schrittNr, FEHLER, meldungText + " – " + AnmeldeOberflaeche.NOCHMALS);
 		handler.postDelayed(() -> {
 			ablaufEnde();
 			laeuft = true;
@@ -841,7 +839,7 @@ public class SperrActivity extends Activity {
 		if (nfc == null) return;
 		try {
 			nfc.enableReaderMode(this, tag -> {
-				String uid = NfcKarte.uid(tag);
+				String uid = Kartenleser.uid(tag);
 				Log.i(TAG, "Kartenleser: Karte da, uid=" + (uid == null ? "keine" : uid.length() / 2 + " Byte")
 						+ " loestEin=" + loestEin + " laeuft=" + laeuft);
 				if (uid == null || loestEin || !laeuft || ablaufAktiv) return;
@@ -859,7 +857,7 @@ public class SperrActivity extends Activity {
 						anmeldungFehler(0, meldung);
 					}
 				});
-			}, NfcKarte.LESER_FLAGS, null);
+			}, Kartenleser.FLAGS, null);
 			Log.i(TAG, "Kartenleser ein");
 		} catch (Exception e) {
 			Log.w(TAG, "Kartenleser: " + e);
@@ -1108,31 +1106,17 @@ public class SperrActivity extends Activity {
 
 	// ─── Oberflaeche (ohne Layout-Dateien, die App hat keine) ───────────────
 
+	// Bausteine aus commons-rosenweg (anmeldeschirm), gleich wie der Anmeldeschirm der Apps
 	private int dp(float v) {
-		return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
+		return AnmeldeOberflaeche.dp(this, v);
 	}
 
 	private TextView text(float sp, int farbe, boolean fett) {
-		TextView t = new TextView(this);
-		t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-		t.setTextColor(farbe);
-		t.setGravity(Gravity.CENTER);
-		if (fett) t.setTypeface(Typeface.DEFAULT_BOLD);
-		return t;
+		return AnmeldeOberflaeche.text(this, sp, farbe, fett);
 	}
 
 	private Button knopf(String beschriftung, String farbe) {
-		Button k = new Button(this);
-		k.setText(beschriftung);
-		k.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-		k.setTextColor(Color.WHITE);
-		k.setAllCaps(false);
-		GradientDrawable g = new GradientDrawable();
-		g.setColor(Color.parseColor(farbe));
-		g.setCornerRadius(dp(14));
-		g.setStroke(Math.max(1, dp(1.2f)), Color.WHITE);   // feiner weisser Rand (Stefan 25.11.2026)
-		k.setBackground(g);
-		return k;
+		return AnmeldeOberflaeche.knopf(this, beschriftung, farbe);
 	}
 
 	/** Vollseitige PIN-Abfrage im Einrichtungsbildschirm (Stefan 25.11.2026), wie die Schritte auf Blau. */
@@ -1208,11 +1192,11 @@ public class SperrActivity extends Activity {
 	private View baueOberflaeche() {
 		// Wie der Ladebildschirm der Stationen: blauer Hintergrund, Rosenweg-Logo in der Mitte
 		// (Stefan 25.11.2026); beim QR-Scannen steht dort das Kamerabild.
-		int hell = Color.WHITE, grau = Color.parseColor("#BFDBFE");
+		int hell = Color.WHITE, grau = Color.parseColor(AnmeldeOberflaeche.HELLBLAU);
 		LinearLayout l = new LinearLayout(this);
 		l.setOrientation(LinearLayout.VERTICAL);
 		l.setGravity(Gravity.CENTER_HORIZONTAL);
-		l.setBackgroundColor(Color.parseColor("#1E3A8A"));
+		l.setBackgroundColor(Color.parseColor(AnmeldeOberflaeche.BLAU));
 		l.setPadding(dp(24), dp(40), dp(24), dp(24));
 
 		TextView unter = text(15, grau, false);
@@ -1241,11 +1225,7 @@ public class SperrActivity extends Activity {
 		View oben = new View(this);
 		obenPlatz = oben;
 		l.addView(oben, new LinearLayout.LayoutParams(1, 0, 1f));
-		android.widget.ImageView bild = new android.widget.ImageView(this);
-		bild.setImageResource(R.drawable.rosenweg_logo);
-		bild.setAdjustViewBounds(true);
-		bild.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-		bild.setContentDescription("Rosenweg");
+		android.widget.ImageView bild = AnmeldeOberflaeche.logo(this);
 		l.addView(bild, new LinearLayout.LayoutParams(dp(230), dp(230)));
 		logo = bild;
 
@@ -1280,7 +1260,7 @@ public class SperrActivity extends Activity {
 		l.addView(pinSeite, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
 		kartenHinweis = text(20, hell, true);
-		kartenHinweis.setText("Rosenweg-Karte\nhinten ans Telefon halten");
+		kartenHinweis.setText(AnmeldeOberflaeche.KARTE_HINWEIS);
 		kartenHinweis.setPadding(0, dp(20), 0, 0);
 		l.addView(kartenHinweis);
 
@@ -1299,7 +1279,7 @@ public class SperrActivity extends Activity {
 		untenPlatz = platz;
 		l.addView(platz, new LinearLayout.LayoutParams(1, 0, 1f));
 
-		Button konto = knopf("Mit Rosenweg-Konto anmelden", "#2563EB");
+		Button konto = knopf(AnmeldeOberflaeche.KONTO_KNOPF, AnmeldeOberflaeche.KNOPF);
 		kontoKnopf = konto;
 		konto.setTextColor(Color.WHITE);
 		konto.setOnClickListener(v -> startActivity(new Intent(this, WebAppActivity.class)
@@ -1308,13 +1288,13 @@ public class SperrActivity extends Activity {
 		kp.bottomMargin = dp(10);
 		l.addView(konto, kp);
 
-		qrKnopf = knopf("QR-Code scannen", "#1E40AF");
+		qrKnopf = knopf("QR-Code scannen", AnmeldeOberflaeche.KNOPF_DUNKEL);
 		qrKnopf.setOnClickListener(v -> { if (kameraAn) kameraStoppen(); else kameraOeffnen(); });
 		LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
 		qp.bottomMargin = dp(10);
 		l.addView(qrKnopf, qp);
 
-		wechselKnopf = knopf("Kamera wechseln", "#1E40AF");
+		wechselKnopf = knopf("Kamera wechseln", AnmeldeOberflaeche.KNOPF_DUNKEL);
 		wechselKnopf.setOnClickListener(v -> {
 			frontkamera = !frontkamera;
 			kameraStarten();
@@ -1323,7 +1303,7 @@ public class SperrActivity extends Activity {
 		wp.bottomMargin = dp(10);
 		l.addView(wechselKnopf, wp);
 
-		Button notruf = knopf("Notruf", "#DC2626");
+		Button notruf = knopf("Notruf", AnmeldeOberflaeche.NOTRUF);
 		notruf.setOnClickListener(v -> notruf());
 		l.addView(notruf, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
 

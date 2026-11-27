@@ -10,8 +10,8 @@ android {
         // 21: natives Multidex (zxing sprengt sonst die 64K-Grenze), Device-Owner-APIs
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 241
-        versionName "1.4-rosenweg.75"
+        versionCode 242
+        versionName "1.4-rosenweg.76"
     }
 
     signingConfigs {
@@ -60,6 +60,9 @@ android {
         // Rosenweg: Kamera-Scanner fuer den persoenlichen Anmelde-QR (Apache 2.0)
         implementation('com.journeyapps:zxing-android-embedded:4.3.0') { transitive = false }
         implementation 'com.google.zxing:core:3.5.3'
+        // Aussehen, Texte und Kartenleser des Sperrbildschirms, gemeinsam mit dem Anmeldeschirm der
+        // Rosenweg-Apps (commons-rosenweg, Modul anmeldeschirm; lokal: publishToMavenLocal)
+        implementation 'ch.rosenweg4303:anmeldeschirm:0.1.0'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     }
 }
