@@ -337,18 +337,41 @@ public class AdbSelbst {
 	 * Global-Einstellungen, die der Device Owner nicht setzen darf: ueber den eigenen adb-Zugang.
 	 * Nur wenn etwas abweicht; blockierend, nicht im UI-Thread.
 	 */
+	/** Apps, die im Ruhemodus Netz brauchen (SIP, MQTT, CardDAV/CalDAV-Abgleich). */
+	static final String[] AKKU_AUSNAHME = {
+			"ch.rosenweg4303.telefon", "ch.rosenweg4303.phone", "ch.rosenweg4303.messages",
+			"ch.rosenweg4303.contacts", "ch.rosenweg4303.calendar"};
+
+	/** Installiert und nicht ausgeblendet (fuer Ausgeblendete nimmt deviceidle nichts an). */
+	private static boolean sichtbarInstalliert(Context c, String paket) {
+		try {
+			c.getPackageManager().getApplicationInfo(paket, 0);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
 	public static synchronized void einstellungenPruefen(Context c) {
 		android.content.ContentResolver r = c.getContentResolver();
 		StringBuilder cmd = new StringBuilder();
 		if (Settings.Global.getInt(r, "power_button_long_press", 1) != 1) cmd.append("settings put global power_button_long_press 1;");
 		if (Settings.Global.getInt(r, "function_key_config_longpress_type", 0) != 0) cmd.append("settings put global function_key_config_longpress_type 0;");
+		// Akku-Ausnahme (27.11.2026, XCover: Rosenweg Kontakte ohne Netz, netpolicy blocked=DOZE|APP_STANDBY,
+		// Bucket 50). Ausblenden und Daten-Loeschen nehmen sie wieder weg - darum hier immer nachziehen.
+		// Wer in der Ausnahme steht, kommt von selbst in den Bucket EXEMPTED.
+		android.os.PowerManager pm = c.getSystemService(android.os.PowerManager.class);
+		for (String paket : AKKU_AUSNAHME) {
+			if (pm == null || pm.isIgnoringBatteryOptimizations(paket) || !sichtbarInstalliert(c, paket)) continue;
+			cmd.append("dumpsys deviceidle whitelist +").append(paket).append(";");
+		}
 		if (cmd.length() == 0 || !freigegeben(c) || !WlanDebug.tcpOffen()) return;
 		Verbindung v = null;
 		try {
 			v = verbindung(c);
 			if (!v.connect("127.0.0.1", WlanDebug.TCP_PORT)) return;
 			befehl(v, "shell:" + cmd);
-			Log.i(TAG, "Seitentaste korrigiert: " + cmd);
+			Log.i(TAG, "per adb nachgezogen: " + cmd);
 		} catch (Exception e) {
 			Log.w(TAG, "Einstellungen pruefen: " + e.getClass().getSimpleName());
 		} finally {

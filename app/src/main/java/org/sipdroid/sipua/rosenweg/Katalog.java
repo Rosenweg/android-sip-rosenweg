@@ -440,6 +440,9 @@ public final class Katalog {
 				Log.w(TAG, "freigeben " + paket + ": " + e);
 			}
 		}
+		// Eingeblendete Apps haben ihre Akku-Ausnahme verloren: gleich nachziehen, nicht erst stuendlich
+		final Context app = c.getApplicationContext();
+		new Thread(() -> AdbSelbst.einstellungenPruefen(app), "EinstPruefen").start();
 	}
 
 	/**
