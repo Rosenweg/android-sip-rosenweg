@@ -34,8 +34,9 @@ import java.util.concurrent.Executors;
  *   JPEG (hoechstens ~500 KB) auf die Anlage (PUT /api/telefon/hintergrund, Geraetezugang,
  *   Person der Sitzung).
  * - Nach dem Anmelden an irgendeinem geteilten Telefon setzt Geraet das Bild der Person
- *   ("hintergrund" im Status = Fassung, "" = keines -> Standard). Beim Abmelden: Standard
- *   (WallpaperManager.clear(FLAG_SYSTEM) = was ein frisch eingerichtetes Telefon zeigt).
+ *   ("hintergrund" im Status = Fassung, "" = keines -> Standard). Beim Abmelden: Standard.
+ * - Standard (Stefan 27.11.2026): ruhiger Rosenweg-Hintergrund, auf jedem Telefon gleich und
+ *   hier gezeichnet (nichts herunterladen): Verlauf #1E3A8A -> #172554, kleines Logo, schwach.
  * - Aendert jemand das Sperrbild (z.B. "Start- und Sperrbildschirm" in der Galerie), setzt
  *   Geraet sofort wieder das Logo (Sperrbild.pruefen).
  *
@@ -151,6 +152,31 @@ public final class Hintergrund {
 		});
 	}
 
+	/**
+	 * "Hintergrund zuruecksetzen" (Rosenweg Launcher, Einstellungen -> AnlageProvider): auf der
+	 * Anlage loeschen und sofort den Standard setzen. Blockiert (Netz), nicht im UI-Faden.
+	 * @return null = ok, sonst Fehlertext
+	 */
+	static String zuruecksetzen(Context c) {
+		final Context app = c.getApplicationContext();
+		if (!geht(app)) return "Nur auf geteilten Telefonen";
+		if (!Anlage.angemeldet(app)) return "Niemand angemeldet";
+		try {
+			Anlage.hintergrundLoeschen(app);
+		} catch (Anlage.AnlageFehler e) {
+			return e.status == 409 ? "Niemand angemeldet" : String.valueOf(e.getMessage());
+		} catch (Exception e) {
+			return "Keine Verbindung zur Telefonanlage";
+		}
+		try {
+			LAUF.submit(() -> anwenden(app, prefs(app).getString("aktuell", ""), "")).get(20, java.util.concurrent.TimeUnit.SECONDS);
+		} catch (Exception e) {
+			Log.w(TAG, "zuruecksetzen: " + e.getClass().getSimpleName());   // der naechste Status holt es nach
+		}
+		Log.i(TAG, "Hintergrund auf Wunsch zurueckgesetzt");
+		return null;
+	}
+
 	/** Bild der Sitzung setzen (oder Standard). Im Faden LAUF. */
 	private static void anwenden(Context app, String marke, String version) {
 		synchronized (WALLPAPER) {
@@ -162,8 +188,8 @@ public final class Hintergrund {
 					wm.setBitmap(b, null, true, WallpaperManager.FLAG_SYSTEM);
 					Log.i(TAG, "Hintergrund der Person gesetzt (" + jpeg.length / 1024 + " KB, " + b.getWidth() + "x" + b.getHeight() + ")");
 				} else {
-					wm.clear(WallpaperManager.FLAG_SYSTEM);
-					Log.i(TAG, "Hintergrund: Standard" + (marke.isEmpty() ? " (abgemeldet)" : " (keiner gespeichert)"));
+					standardSetzen(app, wm);
+					Log.i(TAG, "Hintergrund: Rosenweg-Standard" + (marke.isEmpty() ? " (abgemeldet)" : " (keiner gespeichert)"));
 				}
 				merken(app, wm, marke, b != null ? version : "");
 			} catch (Anlage.AnlageFehler e) {
@@ -177,6 +203,37 @@ public final class Hintergrund {
 			// clear()/setBitmap koennen je nach Hersteller das Sperrbild mitnehmen
 			Sperrbild.pruefen(app);
 		}
+	}
+
+	/** Rosenweg-Standard als Startbildschirm setzen (auch nach dem ersten Start mit fremdem Bild). */
+	static void standardSetzen(Context app, WallpaperManager wm) throws java.io.IOException {
+		wm.setBitmap(standardBild(app), null, true, WallpaperManager.FLAG_SYSTEM);
+	}
+
+	/**
+	 * Ruhig, damit App-Namen lesbar bleiben: senkrechter Verlauf Rosenweg-Blau -> dunkler, das
+	 * Rosenweg-Logo 28 % breit, 16 % deckend, etwas unter der Mitte. Vorschau:
+	 * ~/Downloads/hintergrund-standard.png (gleiche Werte).
+	 */
+	static Bitmap standardBild(Context app) {
+		int[] schirm = schirm(app);
+		int b = Math.max(1, Math.min(schirm[0], schirm[1])), h = Math.max(1, Math.max(schirm[0], schirm[1]));
+		Bitmap bild = Bitmap.createBitmap(b, h, Bitmap.Config.ARGB_8888);
+		Canvas cv = new Canvas(bild);
+		android.graphics.Paint verlauf = new android.graphics.Paint();
+		verlauf.setShader(new android.graphics.LinearGradient(0, 0, 0, h, Sperrbild.BLAU,
+				android.graphics.Color.parseColor("#172554"), android.graphics.Shader.TileMode.CLAMP));
+		cv.drawRect(0, 0, b, h, verlauf);
+		Bitmap logo = BitmapFactory.decodeResource(app.getResources(), org.sipdroid.sipua.R.drawable.rosenweg_logo);
+		if (logo != null) {
+			int breite = (int) (b * 0.28f);
+			int hoehe = breite * logo.getHeight() / logo.getWidth();
+			int x = (b - breite) / 2, y = (int) (h * 0.58f) - hoehe / 2;
+			android.graphics.Paint schwach = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+			schwach.setAlpha((int) (255 * 0.16f));
+			cv.drawBitmap(logo, null, new android.graphics.Rect(x, y, x + breite, y + hoehe), schwach);
+		}
+		return bild;
 	}
 
 	/** Die jetzige System-ID gehoert Geraet (gesetzt oder hochgeladen). Zurueckgelesen, nicht der Rueckgabewert. */
@@ -221,7 +278,7 @@ public final class Hintergrund {
 					case STANDARD:
 						// Abgemeldet (oder erster Lauf nach dem Update): fremder Hintergrund bleibt nicht stehen
 						Log.i(TAG, "Hintergrund ohne Anmeldung geaendert (ID " + eigen + " -> " + ist + "): Standard");
-						wm.clear(WallpaperManager.FLAG_SYSTEM);
+						standardSetzen(app, wm);
 						merken(app, wm, "", "");
 						break;
 					default:

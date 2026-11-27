@@ -348,6 +348,11 @@ public final class Anlage {
 		return new JSONObject(new String(roh(c, "PUT", "/api/telefon/hintergrund", jpeg, 64 * 1024), StandardCharsets.UTF_8));
 	}
 
+	/** DELETE /api/telefon/hintergrund: zurueck auf den Standard (Launcher "Hintergrund zuruecksetzen"). */
+	public static void hintergrundLoeschen(Context c) throws Exception {
+		anfrage(c, "DELETE", "/api/telefon/hintergrund");
+	}
+
 	/** Rohdaten hin/her mit dem Geraetezugang; GET mit 404 -> null. */
 	private static byte[] roh(Context c, String methode, String pfad, byte[] koerper, int maxAntwort) throws Exception {
 		SharedPreferences p = prefs(c);
