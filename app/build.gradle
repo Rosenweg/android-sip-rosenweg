@@ -10,8 +10,8 @@ android {
         // 21: natives Multidex (zxing sprengt sonst die 64K-Grenze), Device-Owner-APIs
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 244
-        versionName "1.4-rosenweg.78"
+        versionCode 245
+        versionName "1.4-rosenweg.79"
     }
 
     signingConfigs {
@@ -62,7 +62,7 @@ android {
         implementation 'com.google.zxing:core:3.5.3'
         // Aussehen, Texte und Kartenleser des Sperrbildschirms, gemeinsam mit dem Anmeldeschirm der
         // Rosenweg-Apps (commons-rosenweg, Modul anmeldeschirm; lokal: publishToMavenLocal)
-        implementation 'ch.rosenweg4303:anmeldeschirm:0.1.0'
+        implementation 'ch.rosenweg4303:anmeldeschirm:0.2.1'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     }
 }
