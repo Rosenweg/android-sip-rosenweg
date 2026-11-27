@@ -64,5 +64,7 @@ android {
         // Rosenweg-Apps (commons-rosenweg, Modul anmeldeschirm; lokal: publishToMavenLocal)
         implementation 'ch.rosenweg4303:anmeldeschirm:0.2.1'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+        // Unit-Tests (./gradlew testDebugUnitTest), nur reine Java-Logik ohne Geraet
+        testImplementation 'junit:junit:4.13.2'
     }
 }

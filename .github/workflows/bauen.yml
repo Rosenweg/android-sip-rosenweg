@@ -33,6 +33,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./gradlew --no-daemon assembleDebug
+      - name: Unit-Tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./gradlew --no-daemon testDebugUnitTest
       - name: rwtunnel in der APK
         run: |
           for abi in arm64-v8a x86_64; do

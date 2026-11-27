@@ -193,8 +193,7 @@ public final class Sperre {
 			};
 			for (String r : rechte) {
 				try {
-					d.setPermissionGrantState(a, c.getPackageName(), r,
-							DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+					Rechte.erteilen(d, a, c.getPackageName(), r);
 				} catch (Exception e) {
 					Log.w(TAG, "Recht " + r + ": " + e.getMessage());
 				}
@@ -255,7 +254,7 @@ public final class Sperre {
 			if (!Katalog.installiert(c, app[0])) continue;
 			for (int i = 1; i < app.length; i++) {
 				try {
-					d.setPermissionGrantState(a, app[0], app[i], DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+					Rechte.erteilen(d, a, app[0], app[i]);
 				} catch (Exception e) {
 					Log.w(TAG, "Recht " + app[0] + " " + app[i] + ": " + e.getMessage());
 				}
