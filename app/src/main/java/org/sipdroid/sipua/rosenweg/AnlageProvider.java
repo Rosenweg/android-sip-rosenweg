@@ -60,6 +60,9 @@ import java.util.TimeZone;
  *       Die App sieht nie ein Token. Welche Pfade eine App so erreicht, legt die Anlage fest
  *       (Config portal_pfade); hier: Signatur des Aufrufers, Methode, Pfadform, Groesse, Takt.
  *       {nicht_angemeldet: true}: niemand am Telefon angemeldet. {fehler}: Netz/Anlage.
+ *       Hochladen: extras "teil" (JSON-Text {id, nr, anzahl, gesamt, kopf}) und koerper = Stueck
+ *       (base64, hoechstens 180 KB); Antwort 202 je Zwischenstueck, beim letzten die der Haupt-API.
+ *       Siehe pbx/README.md (Website). Hoechstens 300 Anfragen je App und Minute.
  *       "sitzung" wechselt mit jeder An-/Abmeldung (die App laedt dann neu); paket nimmt
  *       der Provider vom Aufrufer, nicht aus den extras.
  *
@@ -172,7 +175,7 @@ public class AnlageProvider extends ContentProvider {
 	/** Binder-Grenze ~1 MB je Transaktion; die Anlage begrenzt ebenso. */
 	static final int PORTAL_ANTWORT_MAX = 512 * 1024;
 	/** Hoechstens so viele Anfragen je App und Minute (eine haengende Schleife legt sonst die Anlage lahm). */
-	static final int PORTAL_TAKT_MINUTE = 120;
+	static final int PORTAL_TAKT_MINUTE = 300;
 	private static final java.util.regex.Pattern PORTAL_PFAD = java.util.regex.Pattern.compile(
 			"/api/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,1000}(\\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,1000})?");
 	private static final java.util.regex.Pattern PORTAL_KODIERT_VERBOTEN =
@@ -230,6 +233,18 @@ public class AnlageProvider extends ContentProvider {
 		android.content.Context c = getContext();
 		String methode = extras == null ? "GET" : extras.getString("methode", "GET");
 		String koerper = extras == null ? null : extras.getString("koerper");
+		// Hochladen in Stuecken: {id, nr, anzahl, gesamt, kopf} als JSON-Text, koerper = Stueck (base64)
+		JSONObject teil = null;
+		String teilText = extras == null ? null : extras.getString("teil");
+		if (teilText != null) {
+			if (teilText.length() > 8192) return fehler("Upload-Angaben zu gross.");
+			try {
+				teil = new JSONObject(teilText);
+			} catch (Exception e) {
+				return fehler("Upload-Angaben ungültig.");
+			}
+			if (!("POST".equals(methode) || "PUT".equals(methode))) return fehler("Hochladen nur mit POST oder PUT.");
+		}
 		if (!("GET".equals(methode) || "POST".equals(methode) || "PUT".equals(methode) || "DELETE".equals(methode))) {
 			return fehler("Methode nicht erlaubt: " + methode);
 		}
@@ -244,7 +259,7 @@ public class AnlageProvider extends ContentProvider {
 			return b;
 		}
 		try {
-			JSONObject r = Anlage.portal(c, methode, pfad, koerper, paket);
+			JSONObject r = Anlage.portal(c, methode, pfad, koerper, paket, teil);
 			String json = r.optString("json", "");
 			if (json.length() > PORTAL_ANTWORT_MAX) return fehler("Die Antwort ist zu gross für das Telefon.");
 			return antwort(r.optInt("status", 502), json, r.optString("sitzung", ""));
