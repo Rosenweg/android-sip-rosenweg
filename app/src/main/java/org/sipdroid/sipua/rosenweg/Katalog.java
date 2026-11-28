@@ -458,7 +458,8 @@ public final class Katalog {
 					android.content.pm.PermissionInfo info = pm.getPermissionInfo(p, 0);
 					int schutz = Build.VERSION.SDK_INT >= 28 ? info.getProtection() : info.protectionLevel & 0xf;
 					if (schutz != android.content.pm.PermissionInfo.PROTECTION_DANGEROUS) continue;
-					boolean ok = d.setPermissionGrantState(a, paket, p, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+					// nur wenn noch nicht erteilt: sonst meldet Android bei jedem Abgleich "Standortzugriff moeglich"
+					boolean ok = Rechte.erteilen(d, a, paket, p);
 					if (!ok) Log.w(TAG, "Berechtigung nicht erteilt: " + paket + " " + p);
 				} catch (Exception ignored) {}
 			}

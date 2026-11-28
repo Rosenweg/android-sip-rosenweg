@@ -56,21 +56,45 @@ public class WlanDebug extends BroadcastReceiver {
 	/** Debugging ueber WLAN nur in diesem WLAN (Stefan 25.11.2026). */
 	static final String SSID = "Rosenweg";
 
-	/** Name des aktuellen WLANs ohne Anfuehrungszeichen, "" wenn unbekannt. */
+	/**
+	 * Name des aktuellen WLANs ohne Anfuehrungszeichen, "" wenn unbekannt.
+	 * Android gibt den Namen nur mit Standort-Recht UND eingeschaltetem Standort heraus, sonst
+	 * "<unknown ssid>" - auch dem Device Owner. Ist der Standort aus (Smartphone 1: location_mode 0),
+	 * gar nicht erst versuchen.
+	 */
 	static String aktuellesWlan(Context c) {
 		try {
+			if (!standortAn(c)) return "";
 			if (Sperre.istDeviceOwner(c)) {
-				// Standort-Recht braucht Android fuer den WLAN-Namen; der Geraeteverwalter gibt es sich selbst
-				Sperre.dpm(c).setPermissionGrantState(Sperre.admin(c), c.getPackageName(),
-						android.Manifest.permission.ACCESS_FINE_LOCATION,
-						android.app.admin.DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+				// Standort-Recht braucht Android fuer den WLAN-Namen; der Geraeteverwalter gibt es sich
+				// selbst - nur einmal, jede erneute Erteilung zeigte "Standortzugriff moeglich" an
+				Rechte.erteilen(Sperre.dpm(c), Sperre.admin(c), c.getPackageName(),
+						android.Manifest.permission.ACCESS_FINE_LOCATION);
 			}
 			android.net.wifi.WifiManager wm = c.getApplicationContext().getSystemService(android.net.wifi.WifiManager.class);
-			String s = wm.getConnectionInfo().getSSID();
-			return s == null ? "" : s.replace("\"", "");
+			return wlanName(wm.getConnectionInfo().getSSID());
 		} catch (Exception e) {
 			Log.w(TAG, "WLAN-Name: " + e);
 			return "";
+		}
+	}
+
+	/** Rohwert von WifiInfo.getSSID() -> Name; "" fuer null und "<unknown ssid>". */
+	static String wlanName(String ssid) {
+		if (ssid == null || ssid.equals("<unknown ssid>")) return "";
+		return ssid.replace("\"", "");
+	}
+
+	/** Standort (Ortungsdienste) eingeschaltet? */
+	static boolean standortAn(Context c) {
+		try {
+			if (android.os.Build.VERSION.SDK_INT >= 28) {
+				android.location.LocationManager lm = c.getSystemService(android.location.LocationManager.class);
+				return lm != null && lm.isLocationEnabled();
+			}
+			return Settings.Secure.getInt(c.getContentResolver(), Settings.Secure.LOCATION_MODE, 0) != 0;
+		} catch (Exception e) {
+			return false;
 		}
 	}
 
