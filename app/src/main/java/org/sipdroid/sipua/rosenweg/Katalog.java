@@ -367,7 +367,27 @@ public final class Katalog {
 
 	/** Abmelden: alle Katalog-Apps verstecken, persoenliche Daten loeschen. */
 	/** Browser, deren Daten beim Abmelden geloescht werden (nicht synchronisierbar, Entscheid 24.11.2026). */
-	static final String[] BROWSER_DATEN = {"com.android.chrome"};
+	static final String[] BROWSER_DATEN = {"com.android.chrome", "com.sec.android.app.sbrowser", "org.mozilla.firefox",
+			"com.microsoft.emmx", "com.brave.browser", "com.opera.browser"};
+
+	/**
+	 * Alle Browser, deren Daten beim Abmelden weg muessen: die bekannten plus der Standardbrowser
+	 * (Links aus den Apps, z. B. Nextcloud und Projekte in Rosenweg Unterlagen, oeffnen dort).
+	 * Ohne Rosenweg-Apps, ohne Systemkomponenten (Paket "android").
+	 */
+	static java.util.Set<String> browserPakete(Context c) {
+		java.util.Set<String> l = new java.util.LinkedHashSet<>(java.util.Arrays.asList(BROWSER_DATEN));
+		try {
+			android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(
+					new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.rosenweg4303.ch/")),
+					PackageManager.MATCH_DEFAULT_ONLY);
+			String p = r == null || r.activityInfo == null ? null : r.activityInfo.packageName;
+			if (p != null && !"android".equals(p) && !p.startsWith("ch.rosenweg4303.") && !p.equals(c.getPackageName())) l.add(p);
+		} catch (Exception e) {
+			Log.w(TAG, "Standardbrowser: " + e);
+		}
+		return l;
+	}
 
 	/**
 	 * Apps, die ihre Daten beim Abmelden selbst loeschen (Paket -> Authority ihres Bestaetigungs-
@@ -467,7 +487,7 @@ public final class Katalog {
 		else Nachlauf.vormerken(c, zurueck);
 		// Browser ausserhalb des Katalogs (Chrome): Verlauf, Cookies, Anmeldungen der Person weg
 		if (Build.VERSION.SDK_INT >= 28) {
-			for (String b : BROWSER_DATEN) {
+			for (String b : browserPakete(c)) {
 				if (!installiert(c, b)) continue;
 				try {
 					d.clearApplicationUserData(a, b, Executors.newSingleThreadExecutor(),

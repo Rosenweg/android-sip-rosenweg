@@ -58,7 +58,7 @@ Die Rechte vergibt die Anlage nach den Gruppen der angemeldeten Person (live aus
 | Schritt für Schritt | Ein eigener Bildschirm zeigt die Schritte (Anlage, WLAN, Apps und Rechte, Telefonkonto, Nextcloud, PIN, Startseite) mit Stand; bei einem Fehler: Nochmals versuchen / Abbrechen. |
 | Angemeldet | Startansicht mit Kacheln; angezeigt werden die interne Telefonnummer der Person und die Nebenstelle des Geräts. |
 | Telefon suchen | über die Anlage; das Telefon klingelt laut. |
-| Abmelden | Rosenweg Gerät wartet auf das Hochladen, löscht dann persönliche Daten und Web-Sitzungen. |
+| Abmelden | Rosenweg Gerät wartet auf das Hochladen, löscht dann persönliche Daten, Web-Sitzungen und die Daten des Browsers (Chrome, Samsung Internet, Firefox und der Standardbrowser). |
 
 Mehr zur Nutzung: [rosenweg4303.ch/smartphones](https://www.rosenweg4303.ch/smartphones). Ausführlich: [docs/anleitung.md](docs/anleitung.md).
 
