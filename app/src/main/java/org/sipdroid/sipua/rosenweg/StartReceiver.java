@@ -29,6 +29,7 @@ public class StartReceiver extends BroadcastReceiver {
 		// Neustart: jede Sitzung endet (Stefan 27.11.2026). Zuerst sperren, dann alles andere.
 		if (Intent.ACTION_BOOT_COMPLETED.equals(a)) Sperre.sperrenFrueh(c);
 		org.sipdroid.sipua.ui.Receiver.engine(c).register();
+		Wache.starten(c);
 		Nachlauf.starten(c);   // nach Neustart/Update: offene Dateien der letzten Person fertig hochladen
 		if (!Sperre.istDeviceOwner(c)) return;
 		// Neuer Boot (Boot-Zaehler, einmal je Boot): lokal abmelden wie per Knopf und sperren

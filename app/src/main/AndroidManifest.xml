@@ -190,6 +190,8 @@
             <meta-data android:name="android.nfc.action.TECH_DISCOVERED" android:resource="@xml/nfc_karten" />
         </activity>
         <receiver android:name=".rosenweg.InstallEmpfaenger" android:exported="false" />
+        <!-- Wecker der Wache (alle 5 Minuten): startet HOME-Pruefung, Katalog und Protokoll neu -->
+        <receiver android:name=".rosenweg.Wache" android:exported="false" />
         <!-- Rueckmeldung des Rosenweg Launchers: Startseite geladen/zurueckgesetzt (nur Rosenweg-Signatur) -->
         <receiver android:name=".rosenweg.StartseiteGeladen" android:exported="true"
             android:permission="ch.rosenweg4303.permission.ANLAGE">

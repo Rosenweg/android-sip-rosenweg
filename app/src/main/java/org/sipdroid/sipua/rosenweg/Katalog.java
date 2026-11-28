@@ -71,10 +71,14 @@ public final class Katalog {
 	// ─── Synchronisieren (Hintergrund-Thread!) ──────────────────────────────
 
 	private static final String PREF_ABGLEICH = "rosenweg_abgleich_zeit";
-	private static final long ABGLEICH_ALLE_MS = 6 * 3600 * 1000L;
+	private static final String PREF_VOLL = "rosenweg_abgleich_voll";
+	/** Geaenderten Katalog holt das Geraet nach hoechstens 15 Minuten (If-None-Match), ... */
+	private static final long ABGLEICH_ALLE_MS = 15 * 60 * 1000L;
+	/** ... und prueft unabhaengig davon alle 6 Stunden alles von Grund auf (Installation nachholen). */
+	private static final long VOLL_ALLE_MS = 6 * 3600 * 1000L;
 	private static volatile boolean gleichtAb;
 
-	/** Katalog + Telefonbuch im Hintergrund abgleichen, hoechstens alle 6 h (ausser erzwungen). */
+	/** Katalog + Telefonbuch im Hintergrund abgleichen, hoechstens alle 15 Min. (ausser erzwungen). */
 	public static void vielleichtAbgleichen(Context c, boolean erzwingen) {
 		Context app = c.getApplicationContext();
 		long zuletzt = Anlage.prefs(app).getLong(PREF_ABGLEICH, 0);
@@ -83,7 +87,11 @@ public final class Katalog {
 		gleichtAb = true;
 		new Thread(() -> {
 			try {
-				synchronisieren(app);
+				long jetzt = System.currentTimeMillis();
+				boolean voll = erzwingen || jetzt - Anlage.prefs(app).getLong(PREF_VOLL, 0) >= VOLL_ALLE_MS;
+				synchronisieren(app, !voll);
+				if (voll) Anlage.prefs(app).edit().putLong(PREF_VOLL, jetzt).apply();
+				istMelden(app, false);
 				Kontakte.abgleichen(app);
 				Anlage.prefs(app).edit().putLong(PREF_ABGLEICH, System.currentTimeMillis()).apply();
 			} finally {
@@ -94,17 +102,24 @@ public final class Katalog {
 
 	/** Katalog holen und fehlende/geaenderte APKs installieren. Blockiert. */
 	public static void synchronisieren(Context c) {
+		synchronisieren(c, false);
+	}
+
+	/** @param nurGeaendert true: nichts tun, solange der Katalog der Anlage unveraendert ist (ETag). */
+	static void synchronisieren(Context c, boolean nurGeaendert) {
 		if (!Sperre.istDeviceOwner(c)) return;
 		// Nur ein Abgleich gleichzeitig (Anmeldung, AnmeldeDienst und adb kamen sich in die
 		// Quere und stiessen dieselbe Installation mehrfach an).
-		synchronized (ABGLEICH) { abgleichen(c); }
+		synchronized (ABGLEICH) { abgleichen(c, nurGeaendert); }
 	}
 
 	private static final Object ABGLEICH = new Object();
 
-	private static void abgleichen(Context c) {
+	private static void abgleichen(Context c, boolean nurGeaendert) {
+		boolean ok = false;
 		try {
-			JSONObject k = Anlage.katalog(c);
+			JSONObject k = nurGeaendert ? Anlage.katalogWennGeaendert(c) : Anlage.katalog(c);
+			if (k == null) { ok = true; return; }   // unveraendert seit dem letzten sauberen Abgleich
 			JSONArray apps = k.getJSONArray("apps");
 			Anlage.prefs(c).edit().putString(PREF_KATALOG, apps.toString()).apply();
 			Ausblenden.merkeListe(c, k.optJSONArray("ausblenden"));
@@ -132,9 +147,52 @@ public final class Katalog {
 			}
 			// neu installierte Rosenweg-Apps bekommen ihre Rechte ohne adb
 			if (Sperre.istDeviceOwner(c)) Sperre.fremdeRechte(c, Sperre.dpm(c), Sperre.admin(c));
+			ok = true;
 		} catch (Exception e) {
 			Log.w(TAG, "synchronisieren: " + e);
+		} finally {
+			// Kennung erst nach sauberem Durchlauf merken: sonst bliebe eine fehlgeschlagene
+			// Installation bis zum naechsten Vollabgleich liegen
+			Anlage.katalogEtagMerken(c, ok);
 		}
+	}
+
+	private static final String PREF_IST_GEMELDET = "rosenweg_ist_gemeldet";
+
+	/**
+	 * Meldet der Anlage, welche Katalog-Apps (und diese App) in welcher Fassung installiert sind
+	 * (telefon_apps_ist, Spalte "Apps" auf /smartphones). Nur bei Aenderung oder alle 6 Stunden.
+	 * Blockiert.
+	 */
+	static void istMelden(Context c, boolean erzwingen) {
+		try {
+			if (!Anlage.eingerichtet(c)) return;
+			JSONObject apps = new JSONObject();
+			apps.put(c.getPackageName(), versionCode(c, c.getPackageName()));
+			JSONArray katalog = katalog(c);
+			for (int i = 0; i < katalog.length(); i++) {
+				JSONObject a = katalog.optJSONObject(i);
+				if (a == null || !"apk".equals(a.optString("art"))) continue;
+				String paket = a.optString("paket");
+				if (!paket.startsWith("ch.rosenweg4303.") || !installiert(c, paket)) continue;
+				apps.put(paket, versionCode(c, paket));
+			}
+			String stand = apps.toString();
+			String[] alt = Anlage.prefs(c).getString(PREF_IST_GEMELDET, "0|").split("\\|", 2);
+			long zeit = 0;
+			try { zeit = Long.parseLong(alt[0]); } catch (Exception ignored) { }
+			if (!erzwingen && alt.length > 1 && alt[1].equals(stand) && System.currentTimeMillis() - zeit < VOLL_ALLE_MS) return;
+			Anlage.appsIstMelden(c, apps);
+			Anlage.prefs(c).edit().putString(PREF_IST_GEMELDET, System.currentTimeMillis() + "|" + stand).apply();
+		} catch (Exception e) {
+			Log.w(TAG, "IST-Meldung: " + e);
+		}
+	}
+
+	private static long versionCode(Context c, String paket) throws Exception {
+		int flags = Build.VERSION.SDK_INT >= 24 ? PackageManager.MATCH_UNINSTALLED_PACKAGES : 0;
+		android.content.pm.PackageInfo p = c.getPackageManager().getPackageInfo(paket, flags);
+		return Build.VERSION.SDK_INT >= 28 ? p.getLongVersionCode() : p.versionCode;
 	}
 
 	static boolean installiert(Context c, String paket) {
@@ -200,6 +258,21 @@ public final class Katalog {
 			datei.delete();
 		}
 		Log.i(TAG, "Installation angestossen: " + paket);
+		// Launcher / Rosenweg Phone: Android nimmt die Festlegungen des Device Owners fuer ein
+		// ersetztes Paket weg (28.11.2026, XCover). Gleich hier im Ablauf nachziehen, nicht nur
+		// ueber InstallEmpfaenger oder PACKAGE_REPLACED (das Android dem Manifest-Empfaenger
+		// verweigerte: "Background execution not allowed").
+		if (Sperre.LAUNCHER_PAKET.equals(paket) || Sperre.TELEFON_APP.equals(paket)) {
+			for (int i = 0; i < 45 && !sha.equalsIgnoreCase(installierteSha(c, paket)); i++) {
+				try { Thread.sleep(2000); } catch (InterruptedException e) { break; }
+			}
+			if (sha.equalsIgnoreCase(installierteSha(c, paket))) {
+				if (Sperre.LAUNCHER_PAKET.equals(paket)) Sperre.homePruefen(c, true);
+				else Sperre.telefonAppNeuFestlegen(c);
+			} else {
+				Log.w(TAG, "Installation von " + paket + " nach 90 s nicht sichtbar");
+			}
+		}
 	}
 
 	/**
@@ -493,8 +566,10 @@ public final class Katalog {
 		}
 		// Ersetzt: Android entfernt die Festlegungen des Device Owners fuer das Paket
 		// (28.11.2026, XCover: nach dem Launcher-Update One UI Home als Startseite)
-		if (Sperre.LAUNCHER_PAKET.equals(paket)) Sperre.launcherSichern(c, true);
+		if (Sperre.LAUNCHER_PAKET.equals(paket)) Sperre.homePruefen(c, true);
 		if (Sperre.TELEFON_APP.equals(paket)) Sperre.telefonAppNeuFestlegen(c);
+		final Context app = c.getApplicationContext();
+		new Thread(() -> istMelden(app, true), "IstMelden").start();
 	}
 
 	private static Bundle bundle(JSONObject k) {

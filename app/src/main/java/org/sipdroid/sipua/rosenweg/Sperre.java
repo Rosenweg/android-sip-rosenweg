@@ -163,6 +163,22 @@ public final class Sperre {
 		return true;
 	}
 
+	/**
+	 * HOME stimmt? Angemeldet: Rosenweg Launcher, abgemeldet: Sperrbildschirm (SperrHome).
+	 * Unabhaengig von einer Activity oder dem AnmeldeDienst aufrufbar (Wache, Paket-Empfaenger,
+	 * Installationsablauf). Ist der Launcher installiert, HOME zeigt aber auf ein anderes Paket,
+	 * wird neu gesetzt und geloggt.
+	 * @param nachLauncherInstallation true: Festlegung unbesehen neu setzen (Launcher gerade ersetzt)
+	 * @return true, wenn neu gesetzt wurde
+	 */
+	static boolean homePruefen(Context c, boolean nachLauncherInstallation) {
+		if (!istDeviceOwner(c)) return false;
+		if (Anlage.angemeldet(c)) return launcherSichern(c, nachLauncherInstallation);
+		boolean neu = homeSichern(c);
+		if (neu) Log.w(TAG, "abgemeldet: HOME war nicht der Sperrbildschirm - neu gesetzt");
+		return neu;
+	}
+
 	static final String TELEFON_APP = "ch.rosenweg4303.phone";
 
 	/**

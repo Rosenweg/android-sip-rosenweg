@@ -18,6 +18,7 @@ public class SipdroidApp extends Application implements SharedPreferences.OnShar
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
+                org.sipdroid.sipua.rosenweg.Protokoll.absturz(SipdroidApp.this, t, e);
                 try {
                     java.io.File file = new java.io.File(getExternalFilesDir(null), "crash.txt");
                     java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(file));
@@ -45,6 +46,7 @@ public class SipdroidApp extends Application implements SharedPreferences.OnShar
         applyTheme(prefs.getString(PREF_THEME, THEME_SYSTEM));
         org.sipdroid.sipua.ui.Receiver.engine(this);
         org.sipdroid.sipua.ui.Receiver.updatePhoneAccount(this);
+        org.sipdroid.sipua.rosenweg.Wache.starten(this);
     }
 
     @Override
