@@ -443,12 +443,27 @@ public final class Anlage {
 	 * AnlageFehler 409: niemand angemeldet, 403: Pfad fuer diese App nicht freigegeben.
 	 */
 	public static JSONObject portal(Context c, String methode, String pfad, String koerper, String paket) throws Exception {
+		return portal(c, methode, pfad, koerper, paket, null);
+	}
+
+	/**
+	 * Wie {@link #portal(Context, String, String, String, String)}; mit {@code teil} (Hochladen in
+	 * Stuecken: {id, nr, anzahl, gesamt, kopf}) ist {@code koerper} das Stueck als base64. Beim
+	 * letzten Stueck stellt die Anlage die Anfrage an die Haupt-API: dafuer lange Wartezeit.
+	 */
+	public static JSONObject portal(Context c, String methode, String pfad, String koerper, String paket, JSONObject teil)
+			throws Exception {
 		JSONObject k = new JSONObject()
 				.put("methode", methode)
 				.put("pfad", pfad)
 				.put("paket", paket)
 				.put("koerper", koerper == null ? JSONObject.NULL : koerper);
-		return anfrage(c, "POST", "/api/telefon/portal", k.toString(), 22000);
+		boolean letztes = false;
+		if (teil != null) {
+			k.put("teil", teil);
+			letztes = teil.optInt("nr", 0) >= teil.optInt("anzahl", 1) - 1;
+		}
+		return anfrage(c, "POST", "/api/telefon/portal", k.toString(), letztes ? 330000 : 22000);
 	}
 
 	/** POST /api/telefon/gefunden — Suchanruf mit "Gefunden" beantwortet (Geraetezugang). */
