@@ -827,7 +827,11 @@ public class SperrActivity extends Activity {
 						}
 					}
 				}),
-				new Schritt(ABMELDE_SCHRITTE[5], false, i -> startseitePruefen(app, "abmelden")),
+				new Schritt(ABMELDE_SCHRITTE[5], false, i -> {
+					// Aufraeumen kann die Google-Einrichtung wieder "offen" stellen: gleich nachziehen
+					new Thread(() -> AdbSelbst.einstellungenPruefen(app), "EinstPruefen").start();
+					return startseitePruefen(app, "abmelden");
+				}),
 		};
 	}
 

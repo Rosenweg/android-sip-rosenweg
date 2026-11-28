@@ -87,6 +87,8 @@ public class AnmeldeDienst extends Service {
 					handler.post(() -> Katalog.freigeben(this, apps));
 				}
 				handler.post(this::zeigeBenachrichtigung);  // Name koennte gewechselt haben
+				// Launcher von aussen ersetzt (adb install -r, Updater der Anlage): HOME wieder setzen
+				handler.post(() -> Sperre.launcherSichern(this));
 				Katalog.vielleichtAbgleichen(this, false);
 			}
 		} catch (Anlage.AnlageFehler e) {

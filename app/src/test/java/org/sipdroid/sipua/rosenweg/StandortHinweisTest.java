@@ -30,6 +30,29 @@ public class StandortHinweisTest {
 	}
 
 	@Test
+	public void findMyMobileWeg() {
+		java.util.List<Benachrichtigungen.Eintrag> alle = java.util.Arrays.asList(
+				e("fmm0", "com.samsung.android.fmm", null, "x", "g", true, false),
+				e("fmm1010", "com.samsung.android.fmm", null, "y", null, false, false),
+				e("fmmFest", "com.samsung.android.fmm", null, "z", null, false, true),
+				e("andere", "com.example", null, "x", null, false, false));
+		java.util.List<String> weg = Benachrichtigungen.wegraeumen(alle);
+		assertTrue(weg.contains("fmm0"));
+		assertTrue(weg.contains("fmm1010"));
+		assertFalse(weg.contains("fmmFest"));
+		assertFalse(weg.contains("andere"));
+	}
+
+	@Test
+	public void standortRechteErkannt() {
+		assertTrue(Rechte.standort("android.permission.ACCESS_FINE_LOCATION"));
+		assertTrue(Rechte.standort("android.permission.ACCESS_COARSE_LOCATION"));
+		assertTrue(Rechte.standort("android.permission.ACCESS_BACKGROUND_LOCATION"));
+		assertFalse(Rechte.standort("android.permission.CAMERA"));
+		assertFalse(Rechte.standort(null));
+	}
+
+	@Test
 	public void wlanNameOhneStandortIstLeer() {
 		assertEquals("", WlanDebug.wlanName("<unknown ssid>"));
 		assertEquals("", WlanDebug.wlanName(null));

@@ -357,6 +357,12 @@ public class AdbSelbst {
 		StringBuilder cmd = new StringBuilder();
 		if (Settings.Global.getInt(r, "power_button_long_press", 1) != 1) cmd.append("settings put global power_button_long_press 1;");
 		if (Settings.Global.getInt(r, "function_key_config_longpress_type", 0) != 0) cmd.append("settings put global function_key_config_longpress_type 0;");
+		// Google-Einrichtung abgeschlossen halten (28.11.2026, XCover: "Einrichtung noch im Gang" kam
+		// wieder, user_setup_personalization_state stand auf 1). 10 = fertig; der laufende
+		// Setupwizard wird beendet, damit seine Benachrichtigung verschwindet.
+		if (Settings.Secure.getInt(r, "user_setup_personalization_state", 10) != 10) {
+			cmd.append("settings put secure user_setup_personalization_state 10;am force-stop com.google.android.setupwizard;");
+		}
 		// Akku-Ausnahme (27.11.2026, XCover: Rosenweg Kontakte ohne Netz, netpolicy blocked=DOZE|APP_STANDBY,
 		// Bucket 50). Ausblenden und Daten-Loeschen nehmen sie wieder weg - darum hier immer nachziehen.
 		// Wer in der Ausnahme steht, kommt von selbst in den Bucket EXEMPTED.

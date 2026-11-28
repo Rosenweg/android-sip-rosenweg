@@ -62,6 +62,13 @@ public class Benachrichtigungen extends NotificationListenerService {
 		return "com.android.settings".equals(e.paket) && e.kanal != null && e.kanal.startsWith("samsung_account_push");
 	}
 
+	/** Samsung Find My Mobile / SmartThings Find (Stefan 28.11.2026: weg; App wird zentral ausgeblendet). */
+	static final String FMM = "com.samsung.android.fmm";
+
+	static boolean findMyMobile(Eintrag e) {
+		return FMM.equals(e.paket) && !e.bleibend;
+	}
+
 	static boolean rechteHinweis(Eintrag e) {
 		if (e.bleibend || !RECHTE_KANAL.equals(e.kanal)) return false;
 		for (String p : RECHTE_PAKETE) if (p.equals(e.paket)) return true;
@@ -81,7 +88,7 @@ public class Benachrichtigungen extends NotificationListenerService {
 	static List<String> wegraeumen(List<Eintrag> alle) {
 		List<String> weg = new ArrayList<>();
 		for (Eintrag e : alle) {
-			if (samsungEinrichtung(e) || rosenwegStandortHinweis(e)) weg.add(e.schluessel);
+			if (samsungEinrichtung(e) || rosenwegStandortHinweis(e) || findMyMobile(e)) weg.add(e.schluessel);
 		}
 		for (Eintrag s : alle) {
 			if (!s.sammel || !rechteHinweis(s)) continue;
@@ -105,7 +112,7 @@ public class Benachrichtigungen extends NotificationListenerService {
 	public void onNotificationPosted(StatusBarNotification sbn) {
 		if (sbn == null) return;
 		Eintrag e = Eintrag.von(sbn);
-		if (samsungEinrichtung(e) || rechteHinweis(e)) aufraeumen();
+		if (samsungEinrichtung(e) || rechteHinweis(e) || findMyMobile(e)) aufraeumen();
 	}
 
 	private void aufraeumen() {

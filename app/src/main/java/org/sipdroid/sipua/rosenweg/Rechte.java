@@ -14,6 +14,12 @@ import android.content.ComponentName;
 final class Rechte {
 	private Rechte() { }
 
+	/** Standort-Rechte: ihr Erteilen zeigt den Hinweis des Permission Controllers. */
+	static boolean standort(String recht) {
+		return recht != null && (recht.endsWith(".ACCESS_FINE_LOCATION") || recht.endsWith(".ACCESS_COARSE_LOCATION")
+				|| recht.endsWith(".ACCESS_BACKGROUND_LOCATION"));
+	}
+
 	/** Muss erteilt werden? Nur wenn der Geraeteverwalter es noch nicht fest erteilt hat. */
 	static boolean noetig(int zustand) {
 		return zustand != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED;
@@ -21,7 +27,10 @@ final class Rechte {
 
 	/** Recht fest erteilen, falls noetig; true = ist (jetzt) erteilt. */
 	static boolean erteilen(DevicePolicyManager d, ComponentName a, String paket, String recht) {
-		if (!noetig(d.getPermissionGrantState(a, paket, recht))) return true;
+		int zustand = d.getPermissionGrantState(a, paket, recht);
+		if (!noetig(zustand)) return true;
+		// Protokoll: jede Erteilung eines Standort-Rechts zeigt den Hinweis des Permission Controllers
+		android.util.Log.i("RosenwegRechte", "erteile " + paket + " " + recht + " (Zustand " + zustand + ")");
 		return d.setPermissionGrantState(a, paket, recht, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
 	}
 }
