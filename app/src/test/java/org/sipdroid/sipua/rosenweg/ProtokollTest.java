@@ -49,5 +49,9 @@ public class ProtokollTest {
 		assertTrue(Protokoll.eigenesTag("RosenwegSperre"));
 		assertTrue(Protokoll.eigenesTag("AndroidRuntime"));
 		assertFalse(Protokoll.eigenesTag("chatty"));
+		assertTrue(Protokoll.systemRauschen("WindowManager"));
+		assertTrue(Protokoll.systemRauschen("Layer"));
+		assertFalse(Protokoll.systemRauschen("PackageInstaller"));
+		assertFalse(Protokoll.systemRauschen("ActivityTaskManager"));
 	}
 }

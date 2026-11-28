@@ -36,9 +36,15 @@ public final class Protokoll {
 	private static final String PREF = "rosenweg_protokoll";
 
 	/** Systemzeilen, die fuer HOME/Launcher und Installationen der eigenen Pakete von Belang sind. */
-	static final String SYSTEM_FILTER = "ch\\.rosenweg4303|com\\.sec\\.android\\.app\\.launcher|CATEGORY_HOME|"
-			+ "Background execution not allowed|PackageInstaller|PackageManager.*(replac|install|Package)|"
-			+ "ActivityTaskManager.*(HOME|Launcher)|ROLE_HOME|FATAL EXCEPTION";
+	static final String SYSTEM_FILTER = "CATEGORY_HOME|ROLE_HOME|Background execution not allowed|PackageInstaller|"
+			+ "PackageManager.*(replac|install)|ActivityTaskManager.*(HOME|Launcher)|FATAL EXCEPTION";
+
+	/** Tags, die nur Fenster- und Layer-Rauschen liefern: nicht ins Protokoll. */
+	static boolean systemRauschen(String tag) {
+		return tag.startsWith("WindowManager") || tag.startsWith("Layer") || tag.equals("SurfaceFlinger")
+				|| tag.startsWith("InputDispatcher") || tag.startsWith("ViewRootImpl") || tag.startsWith("ImeTracker")
+				|| tag.startsWith("WindowStateAnimator") || tag.startsWith("SplitWindow") || tag.startsWith("ShellTaskOrganizer");
+	}
 
 	private static final Object SPERRE = new Object();
 	private static long systemZuletzt;
@@ -190,7 +196,7 @@ public final class Protokoll {
 				String z = l.substring(0, 18);
 				if (z.compareTo(sz) <= 0 && !(sz.startsWith("12-") && z.startsWith("01-"))) continue;
 				JSONObject j = zeile(l, jetzt, name, nummer);
-				if (j == null) continue;
+				if (j == null || systemRauschen(j.optString("tag"))) continue;
 				try { j.put("tag", "System/" + j.optString("tag")); } catch (Exception ignored) { }
 				neu.add(j);
 				if (z.compareTo(sletzte) > 0) sletzte = z;
