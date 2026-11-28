@@ -45,6 +45,7 @@ public class AnmeldeDienst extends Service {
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		zeigeBenachrichtigung();
+		Wache.starten(this);
 		if (intent != null && AKTION_ABMELDEN.equals(intent.getAction())) {
 			new Thread(this::abmelden).start();
 			return START_STICKY;

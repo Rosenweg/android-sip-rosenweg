@@ -385,6 +385,26 @@ public class AdbSelbst {
 		}
 	}
 
+	/**
+	 * Systemzeilen aus logcat ueber den eigenen adb-Zugang (die App selbst sieht nur eigene Zeilen).
+	 * Leer, wenn der Schluessel nicht freigegeben oder Port 5555 zu ist. Blockiert.
+	 */
+	static synchronized String logcatSystem(Context c, String filterRegex) {
+		if (!freigegeben(c) || !WlanDebug.tcpOffen()) return "";
+		Verbindung v = null;
+		try {
+			v = verbindung(c);
+			if (!v.connect("127.0.0.1", WlanDebug.TCP_PORT)) return "";
+			return befehl(v, "shell:logcat -d -v threadtime -t 4000 | grep -E '" + filterRegex.replace("'", "") + "' | tail -n 400",
+					400_000);
+		} catch (Exception e) {
+			Log.w(TAG, "logcat System: " + e.getClass().getSimpleName());
+			return "";
+		} finally {
+			try { if (v != null) v.disconnect(); } catch (Exception ignored) { }
+		}
+	}
+
 	// ─── Nach dem Neustart: Port 5555 selbst wiederherstellen ─────────────────
 
 	/** Nach dem Start im Hintergrund versuchen (mehrmals, bis das WLAN steht). */
@@ -455,11 +475,15 @@ public class AdbSelbst {
 	}
 
 	private static String befehl(AbsAdbConnectionManager v, String dienst) throws Exception {
+		return befehl(v, dienst, 4096);
+	}
+
+	private static String befehl(AbsAdbConnectionManager v, String dienst, int max) throws Exception {
 		StringBuilder sb = new StringBuilder();
 		try (AdbStream s = v.openStream(dienst); InputStream in = s.openInputStream()) {
 			byte[] b = new byte[1024];
 			int n;
-			while ((n = in.read(b)) > 0 && sb.length() < 4096) sb.append(new String(b, 0, n));
+			while ((n = in.read(b)) > 0 && sb.length() < max) sb.append(new String(b, 0, n));
 			return sb.toString();
 		} catch (java.io.IOException e) {
 			// libadb meldet das Ende der Ausgabe als "Stream closed" statt -1: was bis dahin kam, gilt.

@@ -221,6 +221,37 @@ public final class Anlage {
 		return anfrage(c, "GET", "/api/telefon/katalog");
 	}
 
+	private static final String PREF_KATALOG_ETAG = "rosenweg_katalog_etag";
+
+	/**
+	 * Katalog nur holen, wenn er sich seit dem letzten vollstaendigen Abgleich geaendert hat
+	 * (If-None-Match). null = unveraendert. Die Kennung wird erst mit {@link #katalogEtagMerken}
+	 * gemerkt, wenn der Abgleich sauber durchlief.
+	 */
+	public static JSONObject katalogWennGeaendert(Context c) throws Exception {
+		String etag = prefs(c).getString(PREF_KATALOG_ETAG, "");
+		JSONObject r = anfrage(c, "GET", "/api/telefon/katalog", "{}", 8000, etag.isEmpty() ? null : etag);
+		return r.optBoolean("_unveraendert") ? null : r;
+	}
+
+	static void katalogEtagMerken(Context c, boolean ok) {
+		prefs(c).edit().putString(PREF_KATALOG_ETAG, ok ? letzterEtag : "").apply();
+	}
+
+	private static volatile String letzterEtag = "";
+
+	/** POST /api/telefon/apps-ist {apps: {paket: versionCode}}: was auf dem Telefon installiert ist. */
+	public static void appsIstMelden(Context c, JSONObject apps) throws Exception {
+		anfrage(c, "POST", "/api/telefon/apps-ist", new JSONObject().put("apps", apps).toString());
+	}
+
+	/** POST /api/telefon/&lt;ext&gt;/log {zeilen: [{t, stufe, tag, text}]}: bereits unkenntlich gemachte Zeilen. */
+	public static void protokollSenden(Context c, org.json.JSONArray zeilen) throws Exception {
+		String ext = prefs(c).getString(Settings.PREF_USERNAME, "");
+		anfrage(c, "POST", "/api/telefon/" + java.net.URLEncoder.encode(ext, "UTF-8") + "/log",
+				new JSONObject().put("zeilen", zeilen).toString(), 15000, null);
+	}
+
 	/** GET /api/telefon/kontakte[?version=] -> {version, kontakte} oder {unveraendert:true}. */
 	public static JSONObject kontakte(Context c, String version) throws Exception {
 		return anfrage(c, "GET", "/api/telefon/kontakte"
@@ -435,6 +466,11 @@ public final class Anlage {
 
 	/** lesenMs: Karten-Anfragen gehen bis UniFi Access (Import, Abgleich) und brauchen laenger. */
 	private static JSONObject anfrage(Context c, String methode, String pfad, String koerper, int lesenMs) throws Exception {
+		return anfrage(c, methode, pfad, koerper, lesenMs, null);
+	}
+
+	private static JSONObject anfrage(Context c, String methode, String pfad, String koerper, int lesenMs,
+			String ifNoneMatch) throws Exception {
 		SharedPreferences p = prefs(c);
 		String basis = p.getString(PREF_API, API_STANDARD);
 		String zugang = p.getString(Settings.PREF_USERNAME, "") + ":" + p.getString(Settings.PREF_PASSWORD, "");
@@ -457,7 +493,11 @@ public final class Anlage {
 					o.write(koerper.getBytes(StandardCharsets.UTF_8));
 				}
 			}
+			if (ifNoneMatch != null) v.setRequestProperty("If-None-Match", ifNoneMatch);
 			int code = v.getResponseCode();
+			if (code == 304) return new JSONObject().put("_unveraendert", true);
+			String et = v.getHeaderField("ETag");
+			if (et != null) letzterEtag = et;
 			String body = lies(code >= 400 ? v.getErrorStream() : v.getInputStream());
 			if (code >= 400) {
 				String fehler = "HTTP " + code;
