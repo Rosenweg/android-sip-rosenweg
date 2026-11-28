@@ -41,6 +41,9 @@ import java.util.TimeZone;
  *       Nummer — Rosenweg Telefon meldet sich dann ab und vergisst den Zugang.
  *       Server/Port/Transport sind die des Geraets (dieselbe Anlage, hier erprobt).
  *       Aenderungen meldet die Geraete-App mit dem Broadcast ch.rosenweg4303.SIP_PERSON_GEAENDERT.
+ *   call("hintergrund_zuruecksetzen", "1") -> {ok (bool), fehler}
+ *       Hintergrund der angemeldeten Person auf den Rosenweg-Standard (Anlage + sofort hier);
+ *       Rosenweg Launcher, Einstellungen "Hintergrund zuruecksetzen".
  *   call("karten_info", uid) -> {json: {found, assigned, status, display_id, person:{name,email}}}
  *   call("karten_zuordnen", uid, {email}) -> {json: {ok, display_id, name}}
  *   call("karten_entziehen", uid) -> {json: {ok}}
@@ -297,6 +300,10 @@ public class AnlageProvider extends ContentProvider {
 					b.putString("benutzer", k.optString("benutzer"));
 					b.putString("app_passwort", k.optString("app_passwort"));
 				}
+			} else if ("hintergrund_zuruecksetzen".equals(method)) {
+				String f = Hintergrund.zuruecksetzen(getContext());
+				b.putBoolean("ok", f == null);
+				if (f != null) b.putString("fehler", f);
 			} else if (method != null && method.startsWith("karten_")) {
 				return karten(method, arg, extras);
 			} else if ("einstellungen_holen".equals(method)) {
