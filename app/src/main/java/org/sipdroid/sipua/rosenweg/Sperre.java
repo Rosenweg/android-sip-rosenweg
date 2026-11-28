@@ -131,6 +131,38 @@ public final class Sperre {
 		}
 	}
 
+	/**
+	 * Angemeldet muss HOME der Rosenweg Launcher sein. Wird der Launcher ersetzt (Katalog-Update,
+	 * adb install -r), nimmt Android die Festlegung des Device Owners fuer das Paket weg, und die
+	 * Hersteller-Startseite uebernimmt (28.11.2026, XCover: One UI Home nach dem Launcher-Update).
+	 * Darum nach jeder Installation des Launchers und bei jedem Status (alle 30 s) pruefen.
+	 * @return true, wenn neu gesetzt werden musste
+	 */
+	static boolean launcherSichern(Context c) {
+		return launcherSichern(c, false);
+	}
+
+	/**
+	 * @param immer true nach dem Ersetzen des Launchers: die Festlegung des Device Owners ist dann
+	 *              weg, auch wenn HOME (z.B. ueber eine von Hand gesetzte Voreinstellung) noch
+	 *              richtig aufloest - darum ohne Pruefung neu setzen.
+	 */
+	static boolean launcherSichern(Context c, boolean immer) {
+		if (!istDeviceOwner(c) || !Anlage.angemeldet(c) || !Katalog.installiert(c, LAUNCHER_PAKET)) return false;
+		if (immer) {
+			rosenwegLauncherAlsHome(c, dpm(c), admin(c));
+			Log.i(TAG, "Launcher ersetzt: HOME neu festgelegt");
+			return true;
+		}
+		Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+		android.content.pm.ResolveInfo r = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
+		if (r != null && r.activityInfo != null && LAUNCHER_PAKET.equals(r.activityInfo.packageName)) return false;
+		rosenwegLauncherAlsHome(c, dpm(c), admin(c));
+		Log.w(TAG, "HOME zeigte nicht auf den Rosenweg Launcher (" + (r == null || r.activityInfo == null
+				? "keiner" : r.activityInfo.packageName) + ") - neu gesetzt");
+		return true;
+	}
+
 	static final String TELEFON_APP = "ch.rosenweg4303.phone";
 
 	/**
@@ -139,6 +171,11 @@ public final class Sperre {
 	 * zwingend ueber die System-Telefon-App (Telecom, EmergencyInCallServiceConnection);
 	 * die bleibt darum installiert, ist im Rosenweg Launcher aber unsichtbar.
 	 */
+	/** Nach dem Ersetzen von Rosenweg Phone: Android hat die Festlegungen fuer das Paket entfernt. */
+	static void telefonAppNeuFestlegen(Context c) {
+		if (istDeviceOwner(c)) telefonAppFestlegen(c, dpm(c), admin(c));
+	}
+
 	private static void telefonAppFestlegen(Context c, DevicePolicyManager d, ComponentName a) {
 		if (!Katalog.installiert(c, TELEFON_APP)) return;
 		// Standard-Telefon-App (Rolle DIALER): ab Android 14 darf der Device Owner das selbst

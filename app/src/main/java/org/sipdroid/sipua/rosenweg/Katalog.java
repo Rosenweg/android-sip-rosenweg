@@ -461,6 +461,11 @@ public final class Katalog {
 					android.content.pm.PermissionInfo info = pm.getPermissionInfo(p, 0);
 					int schutz = Build.VERSION.SDK_INT >= 28 ? info.getProtection() : info.protectionLevel & 0xf;
 					if (schutz != android.content.pm.PermissionInfo.PROTECTION_DANGEROUS) continue;
+					// Geraet selbst braucht den Standort nur fuer den WLAN-Namen (WlanDebug erteilt ihn
+					// dort bei Bedarf). Nach jedem Update der Geraete-App meldet Android den Zustand
+					// voruebergehend nicht als erteilt; Erteilen zeigte dann jedes Mal den Hinweis
+					// "Standortzugriff" (28.11.2026, XCover, RosenwegRechte "Zustand 2").
+					if (paket.equals(c.getPackageName()) && Rechte.standort(p)) continue;
 					// nur wenn noch nicht erteilt: sonst meldet Android bei jedem Abgleich "Standortzugriff moeglich"
 					boolean ok = Rechte.erteilen(d, a, paket, p);
 					if (!ok) Log.w(TAG, "Berechtigung nicht erteilt: " + paket + " " + p);
@@ -486,6 +491,10 @@ public final class Katalog {
 		} catch (Exception e) {
 			Log.w(TAG, "nachInstallation " + paket + ": " + e);
 		}
+		// Ersetzt: Android entfernt die Festlegungen des Device Owners fuer das Paket
+		// (28.11.2026, XCover: nach dem Launcher-Update One UI Home als Startseite)
+		if (Sperre.LAUNCHER_PAKET.equals(paket)) Sperre.launcherSichern(c, true);
+		if (Sperre.TELEFON_APP.equals(paket)) Sperre.telefonAppNeuFestlegen(c);
 	}
 
 	private static Bundle bundle(JSONObject k) {

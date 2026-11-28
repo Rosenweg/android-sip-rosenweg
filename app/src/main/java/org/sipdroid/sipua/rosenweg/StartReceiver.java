@@ -41,6 +41,9 @@ public class StartReceiver extends BroadcastReceiver {
 		Sperre.grundregeln(c);
 		Sperrbild.setzen(c);
 		Hintergrund.beobachten(c);
+		// nach Start/Update: Seitentaste, Akku-Ausnahme, Google-Einrichtung (nur wenn abweichend)
+		final Context app = c.getApplicationContext();
+		new Thread(() -> AdbSelbst.einstellungenPruefen(app), "EinstPruefen").start();
 		if (!neustartGesperrt && Intent.ACTION_MY_PACKAGE_REPLACED.equals(a) && Anlage.angemeldet(c)
 				&& !Bildschirmsperre.abmeldungAusstehend(c)) {
 			// Update der Geraete-App waehrend jemand angemeldet ist: nicht abmelden,
